@@ -7,7 +7,8 @@
 #' @param force Whether to force to install (override) or uninstall TinyTeX.
 #' @param dir The directory to install or uninstall TinyTeX (should not exist
 #'   unless \code{force = TRUE}).
-#' @references See \url{https://yihui.name/tinytex/} to know more about TinyTeX.
+#' @references See the TinyTeX documentation (\url{https://yihui.name/tinytex/})
+#'   for the default installation directories on different platforms.
 #' @export
 install_tinytex = function(force = FALSE, dir) {
   if (!is.logical(force)) stop('The argument "force" must take a logical value.')
@@ -24,10 +25,27 @@ install_tinytex = function(force = FALSE, dir) {
     unlink(dir, recursive = TRUE)
     user_dir = normalizePath(dir, mustWork = FALSE)
   }
-  if (tlmgr_available() && !force) stop(
-    'It seems TeX Live has been installed (check tinytex:::texlive_root()). ',
-    'You may need to uninstall it.', call. = FALSE
-  )
+  if (!force) {
+    msg = if (tlmgr_available()) {
+      system2('tlmgr', '--version')
+      c(
+        'Detected an existing tlmgr at ', Sys.which('tlmgr'), '. ',
+        'It seems TeX Live has been installed (check tinytex:::texlive_root()). '
+      )
+    } else if (Sys.which('pdftex') != '') {
+      system2('pdftex', '--version')
+      c(
+        'Detected an existing LaTeX distribution (e.g., pdftex is at ',
+        Sys.which('pdftex'), '). '
+      )
+    }
+    if (length(msg)) stop(
+      msg, 'You have to uninstall it, or use install_tinytex(force = TRUE) ',
+      'if you are sure TinyTeX can override it (e.g., you are a PATH expert or ',
+      'installed TinyTeX previously).',
+      call. = FALSE
+    )
+  }
   owd = setwd(tempdir())
   on.exit({
     unlink(c('install-unx.sh', 'install-tl.zip', 'pkgs-custom.txt', 'texlive.profile'))
@@ -37,7 +55,9 @@ install_tinytex = function(force = FALSE, dir) {
       'Restart your R session and check if tinytex:::is_tinytex() is TRUE.'
     ) else if (!is_tinytex()) warning(
       'TinyTeX was not successfully installed or configured.',
-      if (p != '') c('tlmgr was found at ', p, '.')
+      if (p != '') c(' tlmgr was found at ', p) else {
+        c('Your PATH variable is ', Sys.getenv('PATH'))
+      }, '. See https://yihui.name/tinytex/faq/ for more information.'
     )
   }, add = TRUE)
   switch(
@@ -55,9 +75,11 @@ install_tinytex = function(force = FALSE, dir) {
       if (!user_dir %in% c('', target)) {
         dir.create(dirname(user_dir), showWarnings = FALSE, recursive = TRUE)
         file.rename(target, user_dir)
+        target = user_dir
         bin = file.path(list.files(file.path(user_dir, 'bin'), full.names = TRUE), 'tlmgr')
         system2(bin, c('path', 'add'))
       }
+      message('TinyTeX installed to ', target)
     },
     'windows' = {
       target = if (user_dir == '') win_app_dir('TinyTeX') else user_dir
@@ -70,6 +92,7 @@ install_tinytex = function(force = FALSE, dir) {
         'https://github.com/yihui/tinytex/raw/master/tools/pkgs-custom.txt',
         'pkgs-custom.txt'
       )
+      pkgs_custom = readLines('pkgs-custom.txt')
       download.file(
         'https://github.com/yihui/tinytex/raw/master/tools/texlive.profile',
         'texlive.profile'
@@ -86,22 +109,23 @@ install_tinytex = function(force = FALSE, dir) {
           'please restart ', if (Sys.getenv('RSTUDIO') != '') 'RStudio' else 'R', '.'
         ))
         bat = readLines('install-tl-windows.bat')
-        # never PAUSE (no way to interactive with the Windows shell from R)
+        # never PAUSE (no way to interact with the Windows shell from R)
         writeLines(
           grep('^pause\\s*$', bat, ignore.case = TRUE, invert = TRUE, value = TRUE),
           'install-tl-windows.bat'
         )
         shell('install-tl-windows.bat -profile=../texlive.profile', invisible = FALSE)
-        system2(
-          'TinyTeX\\bin\\win32\\tlmgr',
-          c('install', 'latex-bin', 'xetex', readLines('../pkgs-custom.txt'))
-        )
         file.remove('TinyTeX/install-tl.log')
         dir.create(target, showWarnings = FALSE, recursive = TRUE)
         file.copy(list.files('TinyTeX', full.names = TRUE), target, recursive = TRUE)
       })
       unlink('install-tl-*', recursive = TRUE)
-      system2(file.path(target, 'bin', 'win32', 'tlmgr'), c('path', 'add'))
+      in_dir(target, {
+        bin_tlmgr = file.path('bin', 'win32', 'tlmgr')
+        system2(bin_tlmgr, c('install', 'latex-bin', 'xetex', pkgs_custom))
+        system2(bin_tlmgr, c('path', 'add'))
+      })
+      message('TinyTeX installed to ', target)
     },
     stop('This platform is not supported.')
   )

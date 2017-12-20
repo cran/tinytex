@@ -22,5 +22,6 @@ Windows), and executes it to install TinyTeX (a custom LaTeX distribution
 based on TeX Live). The function \code{uninstall_tinytex()} removes TinyTeX.
 }
 \references{
-See \url{https://yihui.name/tinytex/} to know more about TinyTeX.
+See the TinyTeX documentation (\url{https://yihui.name/tinytex/})
+  for the default installation directories on different platforms.
 }
