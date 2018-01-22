@@ -1,9 +1,9 @@
 #' Compile a LaTeX document to PDF
 #'
-#' The function \code{latexmk()} uses the system command \command{latexmk} to
-#' compile a LaTeX document to PDF; if \command{latexmk} is not available, use a
-#' simple emulation. The functions \code{pdflatex()}, \code{xelatex()}, and
-#' \code{lualatex()} are wrappers of \code{latexmk(engine =, emulation = TRUE)}.
+#' The function \code{latexmk()} emulates the system command \command{latexmk}
+#' (\url{https://ctan.org/pkg/latexmk}) to compile a LaTeX document to PDF. The
+#' functions \code{pdflatex()}, \code{xelatex()}, and \code{lualatex()} are
+#' wrappers of \code{latexmk(engine =, emulation = TRUE)}.
 #'
 #' The \command{latexmk} emulation works like this: run the LaTeX engine once
 #' (e.g., \command{pdflatex}), run \command{makeindex} to make the index if
@@ -12,13 +12,21 @@
 #' (the \file{*.aux} or \file{*.bcf} file exists), and finally run the LaTeX
 #' engine a number of times (the maximum is 10 by default) to resolve all
 #' cross-references.
+#'
+#' If \code{emulation = FALSE}, you need to make sure the executable
+#' \command{latexmk} is available in your system, otherwise \code{latexmk()}
+#' will fall back to \code{emulation = TRUE}. You can set the global option
+#' \code{options(tinytex.latexmk.emulation = FALSE)} to always avoid emulation
+#' (i.e., always use the executable \command{latexmk}).
 #' @param file A LaTeX file path.
-#' @param engine A LaTeX engine.
-#' @param bib_engine A bibliography engine.
-#' @param emulation Whether to use \command{latexmk} emulation (by default,
-#'   \code{TRUE} if the command \command{latexmk} is not available). You can set
-#'   the global option \code{options(tinytex.latexmk.emulation = TRUE)} to
-#'   always use emulation.
+#' @param engine A LaTeX engine (can be set in the global option
+#'   \code{tinytex.engine}, e.g., \code{options(tinytex.engine = 'xelatex')}).
+#' @param bib_engine A bibliography engine (can be set in the global option
+#'   \code{tinytex.bib_engine}).
+#' @param engine_args Command-line arguments to be passed to \code{engine} (can
+#'   be set in the global option \code{tinytex.engine_args}, e.g.,
+#'   \code{options(tinytex.engine_args = '-shell-escape'}).
+#' @param emulation Whether to emulate the executable \command{latexmk} using R.
 #' @param max_times The maximum number of times to rerun the LaTeX engine when
 #'   using emulation. You can set the global option
 #'   \code{tinytex.compile.max_times}, e.g.,
@@ -28,24 +36,40 @@
 #'   argument is only for the emulation mode and TeX Live.
 #' @export
 latexmk = function(
-  file, engine = c('pdflatex', 'xelatex', 'lualatex'), bib_engine = c('bibtex', 'biber'),
-  emulation = TRUE, max_times = 10, install_packages = emulation && tlmgr_available()
+  file, engine = c('pdflatex', 'xelatex', 'lualatex'),
+  bib_engine = c('bibtex', 'biber'), engine_args = NULL, emulation = TRUE,
+  max_times = 10, install_packages = emulation && tlmgr_available()
 ) {
   if (!grepl('[.]tex$', file))
-    stop("The input file '", file, "' does not appear to be a LaTeX document")
+    stop("The input file '", file, "' does not have the .tex extension")
+  if (missing(engine)) engine = getOption('tinytex.engine', engine)
   engine = gsub('^(pdf|xe|lua)(tex)$', '\\1la\\2', engine)  # normalize *tex to *latex
   engine = match.arg(engine)
-  if (missing(emulation))
-    emulation = getOption('tinytex.latexmk.emulation', Sys.which('latexmk') == '')
-  if (missing(max_times)) max_times = getOption('tinytex.compile.max_times', 10)
-  if (emulation || Sys.which('perl') == '' || system2_quiet('latexmk', '-v') != 0) {
-    return(latexmk_emu(file, engine, bib_engine, max_times, install_packages))
+  tweak_path()
+  if (missing(emulation)) emulation = getOption('tinytex.latexmk.emulation', emulation)
+  if (!emulation) {
+    if (Sys.which('latexmk') == '') {
+      warning('The executable "latexmk" not found in your system')
+      emulation = TRUE
+    } else if (system2_quiet('latexmk', '-v') != 0) {
+      warning('The executable "latexmk" was found but does not work')
+      emulation = TRUE
+    }
   }
+  if (missing(max_times)) max_times = getOption('tinytex.compile.max_times', max_times)
+  if (missing(bib_engine)) bib_engine = getOption('tinytex.bib_engine', bib_engine)
+  if (missing(engine_args)) engine_args = getOption('tinytex.engine_args', engine_args)
+  owd = setwd(dirname(file))
+  on.exit(setwd(owd), add = TRUE)
+  file = basename(file)
+  if (emulation) return(
+    latexmk_emu(file, engine, bib_engine, engine_args, max_times, install_packages)
+  )
   system2_quiet('latexmk', c(
     '-pdf -latexoption=-halt-on-error -interaction=batchmode',
-    paste0('-pdflatex=', engine), shQuote(file)
+    paste0('-pdflatex=', engine), engine_args, shQuote(file)
   ), error = {
-    if (install_packages && !emulation) warning(
+    if (install_packages) warning(
       'latexmk(install_packages = TRUE) does not work when emulation = FALSE'
     )
     check_latexmk_version()
@@ -70,11 +94,10 @@ lualatex = function(...) latexmk(engine = 'lualatex', emulation = TRUE, ...)
 
 # a quick and dirty version of latexmk (should work reasonably well unless the
 # LaTeX document is extremely complicated)
-latexmk_emu = function(file, engine, bib_engine = c('bibtex', 'biber'), times, install_packages) {
-  owd = setwd(dirname(file))
-  on.exit(setwd(owd), add = TRUE)
-  # only use basename because bibtex may not work with full path
-  file = basename(file)
+latexmk_emu = function(
+  file, engine, bib_engine = c('bibtex', 'biber'), engine_args = NULL, times = 10,
+  install_packages = FALSE
+) {
   aux = c(
     'log', 'aux', 'bbl', 'blg', 'fls', 'out', 'lof', 'lot', 'idx', 'toc',
     'nav', 'snm', 'vrb', 'ilg', 'ind', 'xwm', 'bcf', 'brf', 'run.xml'
@@ -86,12 +109,12 @@ latexmk_emu = function(file, engine, bib_engine = c('bibtex', 'biber'), times, i
   # clean up aux files from LaTeX compilation
   files1 = exist_files(aux_files)
   keep_log = FALSE
-  on.exit(add = TRUE, {
+  on.exit({
     files2 = exist_files(aux_files)
     files3 = setdiff(files2, files1)
     if (keep_log) files3 = setdiff(files3, logfile)
     unlink(files3)
-  })
+  }, add = TRUE)
 
   pkgs_last = character()
   filep = normalizePath(paste0(base, '.pdf'), mustWork = FALSE)
@@ -106,12 +129,12 @@ latexmk_emu = function(file, engine, bib_engine = c('bibtex', 'biber'), times, i
   run_engine = function() {
     on_error  = function() {
       if (install_packages && file.exists(logfile)) {
-        pkgs = parse_packages(logfile)
+        pkgs = parse_packages(logfile, quiet = c(TRUE, FALSE, FALSE))
         if (length(pkgs) && !identical(pkgs, pkgs_last)) {
           message('Trying to automatically install missing LaTeX packages...')
           if (tlmgr_install(pkgs) == 0) {
             pkgs_last <<- pkgs
-            run_engine()
+            return(run_engine())
           }
         }
       }
@@ -119,7 +142,7 @@ latexmk_emu = function(file, engine, bib_engine = c('bibtex', 'biber'), times, i
       show_latex_error(file, logfile)
     }
     res = system2_quiet(
-      engine, c('-halt-on-error -interaction=batchmode', shQuote(file)),
+      engine, c('-halt-on-error', '-interaction=batchmode', engine_args, shQuote(file)),
       error = on_error(), fail_rerun = FALSE
     )
     # PNAS you are the worst! Why don't you singal an error in case of missing packages?
@@ -257,23 +280,28 @@ exist_files = function(files) {
 #'   by the \code{log} argument by default).
 #' @param files A character vector of names of the missing files (automatically
 #'   detected from the \code{log} by default).
-#' @param quiet Whether to suppress messages when finding packages.
+#' @param quiet Whether to suppress messages when finding packages. It should be
+#'   a logical vector of length 3: the first element indicates whether to
+#'   suppress the message when no missing LaTeX packages could be detected from
+#'   the log, the second element indicate whether to suppress the message when
+#'   searching for packages via \code{tlmgr_search()}, and the third element
+#'   indicates whether to warn if no packages could be found via
+#'   \code{tlmgr_search()}.
 #' @return A character vector of LaTeX package names.
 #' @export
 parse_packages = function(
-  log, text = readLines(log), files = detect_files(text), quiet = FALSE
+  log, text = readLines(log), files = detect_files(text), quiet = rep(FALSE, 3)
 ) {
-  pkgs = character()
-  x = files
+  pkgs = character(); quiet = rep_len(quiet, length.out = 3); x = files
   if (length(x) == 0) {
-    if (!quiet) message(
+    if (!quiet[1]) message(
       'I was unable to find any missing LaTeX packages from the error log',
       if (missing(log)) '.' else c(' ', log, '.')
     )
     return(invisible(pkgs))
   }
   for (j in seq_along(x)) {
-    l = tlmgr_search(paste0('/', x[j]), stdout = TRUE, .quiet = quiet)
+    l = tlmgr_search(paste0('/', x[j]), stdout = TRUE, .quiet = quiet[2])
     if (length(l) == 0) next
     if (x[j] == 'fandol') return(x[j])  # a known package
     # why $? e.g. searching for mf returns a list like this
@@ -283,7 +311,7 @@ parse_packages = function(
     #     bin/x86_64-darwin/mfplain  <- but this also matches /mf
     k = grep(paste0('/', x[j], '$'), l)  # only match /mf exactly
     if (length(k) == 0) {
-      if (!quiet) warning('Failed to find a package that contains ', x[j])
+      if (!quiet[3]) warning('Failed to find a package that contains ', x[j])
       next
     }
     k = k[k > 2]
@@ -334,14 +362,24 @@ detect_files = function(text) {
   })))
 }
 
+# a helper function that combines parse_packages() and tlmgr_install()
+parse_install = function(...) {
+  tlmgr_install(parse_packages(...))
+}
+
 # it should be rare that we need to manually run texhash
-texhash = function() system2('texhash')
+texhash = function() {
+  tweak_path()
+  system2('texhash')
+}
 
 fmtutil = function(usermode = FALSE) {
+  tweak_path()
   system2(if (usermode) 'fmtutil-user' else 'fmtutil-sys', '--all')
 }
 
 # look up files in the Kpathsea library, e.g., kpsewhich('Sweave.sty')
 kpsewhich = function(filename, options = character()) {
+  tweak_path()
   system2('kpsewhich', c(options, shQuote(filename)))
 }

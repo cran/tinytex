@@ -35,13 +35,33 @@
 #' # list all installed LaTeX packages
 #' tlmgr(c('info', '--list', '--only-installed', '--data', 'name'))
 tlmgr = function(args = character(), usermode = FALSE, ..., .quiet = FALSE) {
+  tweak_path()
   if (!tlmgr_available()) {
     warning('TeX Live does not seem to be installed. See https://yihui.name/tinytex/.')
-    invisible(invisible(127L))
   }
   if (usermode) args = c('--usermode', args)
   if (!.quiet) message(paste(c('tlmgr', args), collapse = ' '))
   system2('tlmgr', args, ...)
+}
+
+# add ~/bin to PATH if necessary on Linux, because sometimes PATH may not be
+# inherited (https://github.com/rstudio/rstudio/issues/1878), and TinyTeX is
+# installed to ~/bin by default
+tweak_path = function() {
+  if (!is_linux()) return()
+  if (tlmgr_available()) return()
+  # if tlmgr is not found, and OS is not Linux, just give up
+  if (!is_linux() ) return()
+  # check if ~/bin/tlmgr exists (created by TinyTeX by default)
+  if (!file_test('-x', '~/bin/tlmgr')) return()
+  old = Sys.getenv('PATH')
+  bin = normalizePath('~/bin')
+  if (bin %in% unlist(strsplit(old, s <- .Platform$path.sep, fixed = TRUE))) return()
+  Sys.setenv(PATH = paste(bin, old, sep = s))
+  do.call(
+    on.exit, list(substitute(Sys.setenv(PATH = x), list(x = old)), add = TRUE),
+    envir = parent.frame()
+  )
 }
 
 tlmgr_available = function() Sys.which('tlmgr') != ''
@@ -136,5 +156,29 @@ tlmgr_conf = function(more_args = character()) {
 #' # all files under R's texmf tree
 #' list.files(file.path(R.home('share'), 'texmf'), recursive = TRUE, full.names = TRUE)
 r_texmf = function(action = c('add', 'remove')) {
-  tlmgr_conf(c('auxtrees', match.arg(action), shQuote(file.path(R.home('share'), 'texmf'))))
+  tlmgr_conf(c('auxtrees', match.arg(action), r_texmf_path()))
 }
+
+r_texmf_path = function() shQuote(file.path(R.home('share'), 'texmf'))
+
+#' Sizes of LaTeX packages in TeX Live
+#'
+#' Use the command \command{tlmgr info --list --only-installed} to obtain the
+#' sizes of installed LaTeX packages.
+#' @param show_total Whether to show the total size.
+#' @export
+#' @return A data frame of three columns: \code{package} is the package names,
+#'   \code{size} is the sizes in bytes, and \code{size_h} is the human-readable
+#'   version of sizes.
+tl_sizes = function(show_total = TRUE) {
+  info = tlmgr(c('info', '--list', '--only-installed', '--data', 'name,size'), stdout = TRUE)
+  info = read.table(sep = ',', text = info, stringsAsFactors = FALSE, col.names = c('package', 'size'))
+  info = info[order(info[, 'size'], decreasing = TRUE), , drop = FALSE]
+  info$size_h = sapply(info[, 'size'], auto_size)
+  rownames(info) = NULL
+  if (show_total) message('The total size is ', auto_size(sum(info$size)))
+  info
+}
+
+# human-readable size from bytes
+auto_size = function(bytes) format(structure(bytes, class = 'object_size'), 'auto')

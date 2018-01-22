@@ -7,10 +7,14 @@
 #' @param force Whether to force to install (override) or uninstall TinyTeX.
 #' @param dir The directory to install or uninstall TinyTeX (should not exist
 #'   unless \code{force = TRUE}).
+#' @param repository The CTAN repository to be used. By default, a fast mirror
+#'   is automatically chosen. You can manually set one if the automatic mirror
+#'   is not really fast enough, e.g., if you are in China, you may consider
+#'   \code{'http://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet'}.
 #' @references See the TinyTeX documentation (\url{https://yihui.name/tinytex/})
 #'   for the default installation directories on different platforms.
 #' @export
-install_tinytex = function(force = FALSE, dir) {
+install_tinytex = function(force = FALSE, dir, repository = 'ctan') {
   if (!is.logical(force)) stop('The argument "force" must take a logical value.')
   check_dir = function(dir) {
     if (dir_exists(dir) && !force) stop(
@@ -25,6 +29,7 @@ install_tinytex = function(force = FALSE, dir) {
     unlink(dir, recursive = TRUE)
     user_dir = normalizePath(dir, mustWork = FALSE)
   }
+  tweak_path()
   if (!force) {
     msg = if (tlmgr_available()) {
       system2('tlmgr', '--version')
@@ -60,25 +65,37 @@ install_tinytex = function(force = FALSE, dir) {
       }, '. See https://yihui.name/tinytex/faq/ for more information.'
     )
   }, add = TRUE)
+
+  add_texmf = function(bin) {
+    system2(bin, c('conf', 'auxtrees', 'add', r_texmf_path()))
+  }
+  https = grepl('^https://', repository)
+
   switch(
     os,
     'unix' = {
+      macos = Sys.info()[['sysname']] == 'Darwin'
       download.file(
         'https://github.com/yihui/tinytex/raw/master/tools/install-unx.sh',
         'install-unx.sh'
       )
-      system2('sh', 'install-unx.sh')
+      system2('sh', c(
+        'install-unx.sh', if (repository != 'ctan') c(
+          '--no-admin', '--path', shQuote(repository), if (macos && https) 'tlgpg'
+        )
+      ))
       target = normalizePath(
-        if (Sys.info()[['sysname']] == 'Darwin') '~/Library/TinyTeX' else '~/.TinyTeX'
+        if (macos) '~/Library/TinyTeX' else '~/.TinyTeX'
       )
       if (!dir_exists(target)) stop('Failed to install TinyTeX.')
       if (!user_dir %in% c('', target)) {
         dir.create(dirname(user_dir), showWarnings = FALSE, recursive = TRUE)
         file.rename(target, user_dir)
         target = user_dir
-        bin = file.path(list.files(file.path(user_dir, 'bin'), full.names = TRUE), 'tlmgr')
-        system2(bin, c('path', 'add'))
       }
+      bin = file.path(list.files(file.path(target, 'bin'), full.names = TRUE), 'tlmgr')
+      system2(bin, c('path', 'add'))
+      add_texmf(bin)
       message('TinyTeX installed to ', target)
     },
     'windows' = {
@@ -122,8 +139,18 @@ install_tinytex = function(force = FALSE, dir) {
       unlink('install-tl-*', recursive = TRUE)
       in_dir(target, {
         bin_tlmgr = file.path('bin', 'win32', 'tlmgr')
-        system2(bin_tlmgr, c('install', 'latex-bin', 'xetex', pkgs_custom))
-        system2(bin_tlmgr, c('path', 'add'))
+        tlmgr = function(...) system2(bin_tlmgr, ...)
+        if (repository != 'ctan') {
+          tlmgr(c('option', 'repository', shQuote(repository)))
+          if (https) tlmgr(c('--repository', 'http://www.preining.info/tlgpg/', 'install', 'tlgpg'))
+          if (tlmgr(c('update', '--list')) != 0) {
+            warning('The repository ', repository, ' does not seem to be accessible. Reverting to the default CTAN mirror.')
+            tlmgr(c('option', 'repository', 'ctan'))
+          }
+        }
+        tlmgr(c('install', 'latex-bin', 'xetex', pkgs_custom))
+        tlmgr(c('path', 'add'))
+        add_texmf(bin_tlmgr)
       })
       message('TinyTeX installed to ', target)
     },
@@ -134,11 +161,13 @@ install_tinytex = function(force = FALSE, dir) {
 #' @rdname install_tinytex
 #' @export
 uninstall_tinytex = function(force = FALSE, dir = texlive_root()) {
+  tweak_path()
   if (dir == '') stop('TinyTeX does not seem to be installed.')
   if (!is_tinytex() && !force) stop(
     'Detected TeX Live at "', dir, '", but it appears to be TeX Live instead of TinyTeX. ',
     'To uninstall TeX Live, use the argument force = TRUE.'
   )
+  r_texmf('remove')
   tlmgr_path('remove')
   unlink(dir, recursive = TRUE)
 }
@@ -150,8 +179,9 @@ win_app_dir = function(...) {
 }
 
 texlive_root = function() {
+  tweak_path()
   path = Sys.which('tlmgr')
-  if (path == '') return(path)
+  if (path == '') return('')
   root_dir = function(path, ...) {
     dir = normalizePath(file.path(dirname(path), ...), mustWork = TRUE)
     if (!'bin' %in% list.files(dir)) stop(
@@ -178,7 +208,7 @@ symlink_root = function(path) {
 }
 
 is_tinytex = function() {
-  tolower(basename(texlive_root())) == 'tinytex'
+  gsub('^[.]', '', tolower(basename(texlive_root()))) == 'tinytex'
 }
 
 in_dir = function(dir, expr) {

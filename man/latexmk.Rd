@@ -8,8 +8,8 @@
 \title{Compile a LaTeX document to PDF}
 \usage{
 latexmk(file, engine = c("pdflatex", "xelatex", "lualatex"), bib_engine = c("bibtex", 
-    "biber"), emulation = TRUE, max_times = 10, install_packages = emulation && 
-    tlmgr_available())
+    "biber"), engine_args = NULL, emulation = TRUE, max_times = 10, 
+    install_packages = emulation && tlmgr_available())
 
 pdflatex(...)
 
@@ -20,14 +20,17 @@ lualatex(...)
 \arguments{
 \item{file}{A LaTeX file path.}
 
-\item{engine}{A LaTeX engine.}
+\item{engine}{A LaTeX engine (can be set in the global option
+\code{tinytex.engine}, e.g., \code{options(tinytex.engine = 'xelatex')}).}
 
-\item{bib_engine}{A bibliography engine.}
+\item{bib_engine}{A bibliography engine (can be set in the global option
+\code{tinytex.bib_engine}).}
 
-\item{emulation}{Whether to use \command{latexmk} emulation (by default,
-\code{TRUE} if the command \command{latexmk} is not available). You can set
-the global option \code{options(tinytex.latexmk.emulation = TRUE)} to
-always use emulation.}
+\item{engine_args}{Command-line arguments to be passed to \code{engine} (can
+be set in the global option \code{tinytex.engine_args}, e.g.,
+\code{options(tinytex.engine_args = '-shell-escape'}).}
+
+\item{emulation}{Whether to emulate the executable \command{latexmk} using R.}
 
 \item{max_times}{The maximum number of times to rerun the LaTeX engine when
 using emulation. You can set the global option
@@ -42,10 +45,10 @@ argument is only for the emulation mode and TeX Live.}
 \code{engine} and \code{emulation}).}
 }
 \description{
-The function \code{latexmk()} uses the system command \command{latexmk} to
-compile a LaTeX document to PDF; if \command{latexmk} is not available, use a
-simple emulation. The functions \code{pdflatex()}, \code{xelatex()}, and
-\code{lualatex()} are wrappers of \code{latexmk(engine =, emulation = TRUE)}.
+The function \code{latexmk()} emulates the system command \command{latexmk}
+(\url{https://ctan.org/pkg/latexmk}) to compile a LaTeX document to PDF. The
+functions \code{pdflatex()}, \code{xelatex()}, and \code{lualatex()} are
+wrappers of \code{latexmk(engine =, emulation = TRUE)}.
 }
 \details{
 The \command{latexmk} emulation works like this: run the LaTeX engine once
@@ -55,4 +58,10 @@ necessary (the \file{*.idx} file exists), run the bibliography engine
 (the \file{*.aux} or \file{*.bcf} file exists), and finally run the LaTeX
 engine a number of times (the maximum is 10 by default) to resolve all
 cross-references.
+
+If \code{emulation = FALSE}, you need to make sure the executable
+\command{latexmk} is available in your system, otherwise \code{latexmk()}
+will fall back to \code{emulation = TRUE}. You can set the global option
+\code{options(tinytex.latexmk.emulation = FALSE)} to always avoid emulation
+(i.e., always use the executable \command{latexmk}).
 }
