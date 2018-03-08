@@ -75,6 +75,14 @@ install_tinytex = function(force = FALSE, dir, repository = 'ctan') {
     os,
     'unix' = {
       macos = Sys.info()[['sysname']] == 'Darwin'
+      downloader = if (macos) 'curl' else 'wget'
+      if (Sys.which(downloader) == '') stop(sprintf(
+        "'%s' is not found but required to install TinyTeX", downloader
+      ), call. = FALSE)
+      if (!macos && !dir_exists('~/bin')) on.exit(message(
+        'You may have to restart your system after installing TinyTeX to make sure ',
+        '~/bin appears in your PATH variable (https://github.com/yihui/tinytex/issues/16).'
+      ), add = TRUE)
       download.file(
         'https://github.com/yihui/tinytex/raw/master/tools/install-unx.sh',
         'install-unx.sh'
@@ -90,7 +98,7 @@ install_tinytex = function(force = FALSE, dir, repository = 'ctan') {
       if (!dir_exists(target)) stop('Failed to install TinyTeX.')
       if (!user_dir %in% c('', target)) {
         dir.create(dirname(user_dir), showWarnings = FALSE, recursive = TRUE)
-        file.rename(target, user_dir)
+        dir_rename(target, user_dir)
         target = user_dir
       }
       bin = file.path(list.files(file.path(target, 'bin'), full.names = TRUE), 'tlmgr')
@@ -217,3 +225,14 @@ in_dir = function(dir, expr) {
 }
 
 dir_exists = function(path) file_test('-d', path)
+
+dir_rename = function(from, to) {
+  # cannot rename '/foo' to '/bar' because of 'Invalid cross-device link'
+  suppressWarnings(file.rename(from, to)) || dir_copy(from, to)
+}
+
+dir_copy = function(from, to) {
+  dir.create(to, showWarnings = FALSE, recursive = TRUE)
+  all(file.copy(list.files(from, full.names = TRUE), to, recursive = TRUE)) &&
+    unlink(from, recursive = TRUE) == 0
+}
