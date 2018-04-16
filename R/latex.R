@@ -69,8 +69,18 @@ latexmk = function(
   if (missing(engine_args)) engine_args = getOption('tinytex.engine_args', engine_args)
   if (missing(clean)) clean = getOption('tinytex.clean', TRUE)
   pdf = gsub('[.]tex$', '.pdf', basename(file))
+  output_dir = getOption('tinytex.output_dir')
+  if (!is.null(output_dir)) {
+    output_dir_arg = shQuote(paste0(if (emulation) '-', '-output-directory=', output_dir))
+    if (length(grep(output_dir_arg, engine_args, fixed = TRUE)) == 0) stop(
+      "When you set the global option 'tinytex.output_dir', the argument 'engine_args' ",
+      "must contain this value: ", capture.output(dput(output_dir_arg))
+    )
+    pdf = file.path(output_dir, pdf)
+    if (missing(pdf_file)) pdf_file = file.path(output_dir, basename(pdf_file))
+  }
   check_pdf = function() {
-    if (!file.exists(pdf)) show_latex_error(file)
+    if (!file.exists(pdf)) show_latex_error(file, sub('.pdf$', '.log', pdf))
     file_rename(pdf, pdf_file)
     pdf_file
   }
@@ -87,7 +97,7 @@ latexmk = function(
     )
     check_latexmk_version()
   })
-  if (clean) system2('latexmk', '-c', stdout = FALSE)  # clean up nonessential files
+  if (clean) system2('latexmk', c('-c', engine_args), stdout = FALSE)
   check_pdf()
 }
 
@@ -118,6 +128,8 @@ latexmk_emu = function(
   )
   base = gsub('[.]tex$', '', basename(file))
   aux_files = paste(base, aux, sep = '.')
+  if (!is.null(output_dir <- getOption('tinytex.output_dir')))
+    aux_files = file.path(output_dir, aux_files)
   logfile = aux_files[1]; unlink(logfile)  # clean up the log before compilation
 
   # clean up aux files from LaTeX compilation
@@ -131,18 +143,7 @@ latexmk_emu = function(
   }, add = TRUE)
 
   pkgs_last = character()
-  filep = paste0(base, '.pdf')
-  # backup the PDF output if it exists, and move it back if the compilation failed
-  if (file.exists(filep)) {
-    filep2 = tempfile('tinytex_', '.', '.pdf')
-    if (file.rename(filep, filep2)) on.exit(
-      if (file.exists(filep)) file.remove(filep2) else file.rename(filep2, filep),
-      add = TRUE
-    ) else warning(
-      'It seems I do not have write permission to the directory "', getwd(), '"',
-      call. = FALSE
-    )
-  }
+  filep = sub('.log$', '.pdf', logfile)
   run_engine = function() {
     on_error  = function() {
       if (install_packages && file.exists(logfile)) {
@@ -210,7 +211,7 @@ latexmk_emu = function(
   }
   for (i in seq_len(times)) {
     if (file.exists(logfile)) {
-      if (!any(grepl('(Rerun to get|Please \\(re\\)run) ', readLines(logfile)))) break
+      if (!any(grepl('(Rerun to get|Please \\(re\\)run) ', readLines(logfile), useBytes = TRUE))) break
     } else warning('The LaTeX log file "', logfile, '" is not found')
     run_engine()
   }
@@ -234,13 +235,29 @@ tweak_aux = function(aux, x = readLines(aux)) {
 }
 
 system2_quiet = function(..., error = NULL, fail_rerun = TRUE) {
+  # system2(stdout = FALSE) fails on Windows with MiKTeX's pdflatex in the R
+  # console in RStudio: https://github.com/rstudio/rstudio/issues/2446 so I have
+  # to redirect stdout and stderr to files instead
+  system2_file = function() {
+    f1 = tempfile('stdout'); f2 = tempfile('stderr')
+    on.exit(unlink(c(f1, f2)), add = TRUE)
+    system2(..., stdout = f1, stderr = f2)
+  }
   # run the command quietly if possible
-  res = system2(..., stdout = FALSE, stderr = FALSE)
+  res = if (use_file_stdout()) system2_file() else {
+    system2(..., stdout = FALSE, stderr = FALSE)
+  }
   # if failed, use the normal mode
   if (fail_rerun && res != 0) res = system2(...)
   # if still fails, run the error callback
   if (res != 0) error  # lazy evaluation
   invisible(res)
+}
+
+use_file_stdout = function() {
+  getOption('tinytex.stdout.file', {
+    os == 'windows' && interactive() && !is.na(Sys.getenv('RSTUDIO', NA))
+  })
 }
 
 # parse the LaTeX log and show error messages
