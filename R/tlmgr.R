@@ -47,6 +47,8 @@ tlmgr = function(args = character(), usermode = FALSE, ..., .quiet = FALSE) {
 # add ~/bin to PATH if necessary on Linux, because sometimes PATH may not be
 # inherited (https://github.com/rstudio/rstudio/issues/1878), and TinyTeX is
 # installed to ~/bin by default
+
+#' @importFrom xfun is_linux is_unix is_macos
 tweak_path = function() {
   if (!is_linux()) return()
   if (tlmgr_available()) return()
@@ -95,9 +97,16 @@ tlmgr_install = function(pkgs = character(), usermode = FALSE, path = !usermode 
   res = 0L
   if (length(pkgs)) {
     res = tlmgr(c('install', pkgs), usermode)
-    if (res != 0) {
+    if (res != 0 || tl_list(pkgs, stdout = FALSE, stderr = FALSE, .quiet = TRUE) != 0) {
       tlmgr_update(all = FALSE, usermode = usermode)
       res = tlmgr(c('install', pkgs), usermode)
+    }
+    if ('epstopdf' %in% pkgs && is_unix() && Sys.which('gs') == '') {
+      if (is_macos() && Sys.which('brew')) {
+        message('Trying to install GhostScript via Homebrew for the epstopdf package.')
+        system('brew install ghostscript')
+      }
+      if (Sys.which('gs') == '') warning('GhostScript is required for the epstopdf package.')
     }
     if (path) tlmgr_path('add')
   }
@@ -175,7 +184,7 @@ r_texmf_path = function() shQuote(file.path(R.home('share'), 'texmf'))
 #'   \code{size} is the sizes in bytes, and \code{size_h} is the human-readable
 #'   version of sizes.
 tl_sizes = function(show_total = TRUE) {
-  info = tlmgr(c('info', '--list', '--only-installed', '--data', 'name,size'), stdout = TRUE)
+  info = tl_list(NULL, 'name,size', stdout = TRUE)
   info = read.table(sep = ',', text = info, stringsAsFactors = FALSE, col.names = c('package', 'size'))
   info = info[order(info[, 'size'], decreasing = TRUE), , drop = FALSE]
   info$size_h = sapply(info[, 'size'], auto_size)
@@ -186,3 +195,17 @@ tl_sizes = function(show_total = TRUE) {
 
 # human-readable size from bytes
 auto_size = function(bytes) format(structure(bytes, class = 'object_size'), 'auto')
+
+#' List the names of installed TeX Live packages
+#'
+#' Calls \command{tlmgr info --list --only-installed --data name} to obtain the
+#' names of all installed TeX Live packages. Platform-specific strings in
+#' package names are removed, e.g., \code{"tex"} is returned for the package
+#' \pkg{tex.x86_64-darwin}.
+#' @export
+#' @return A character vector of package names.
+tl_pkgs = function() gsub('[.].*', '', tl_list(stdout = TRUE))
+
+tl_list = function(pkgs = NULL, field = 'name', ...) {
+  tlmgr(c('info', '--list', '--only-installed', '--data', field, pkgs), ...)
+}
