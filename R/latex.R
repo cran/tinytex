@@ -18,6 +18,14 @@
 #' will fall back to \code{emulation = TRUE}. You can set the global option
 #' \code{options(tinytex.latexmk.emulation = FALSE)} to always avoid emulation
 #' (i.e., always use the executable \command{latexmk}).
+#'
+#' The default command to generate the index (if necessary) is
+#' \command{makeindex}. To change it to a different command (e.g.,
+#' \command{zhmakeindex}), you may set the global option
+#' \code{tinytex.makeindex}. To pass additional command-line arguments to the
+#' command, you may set the global option \code{tinytex.makeindex.args} (e.g.,
+#' \code{options(tinytex.makeindex = 'zhmakeindex', tinytex.makeindex.args =
+#' c('-z', 'pinyin'))}).
 #' @param file A LaTeX file path.
 #' @param engine A LaTeX engine (can be set in the global option
 #'   \code{tinytex.engine}, e.g., \code{options(tinytex.engine = 'xelatex')}).
@@ -50,6 +58,7 @@ latexmk = function(
 ) {
   if (!grepl('[.]tex$', file))
     stop("The input file '", file, "' does not have the .tex extension")
+  file = path.expand(file)
   if (missing(engine)) engine = getOption('tinytex.engine', engine)
   engine = gsub('^(pdf|xe|lua)(tex)$', '\\1la\\2', engine)  # normalize *tex to *latex
   engine = match.arg(engine)
@@ -170,8 +179,9 @@ latexmk_emu = function(
   run_engine()
   # generate index
   if (file.exists(idx <- aux_files[2])) {
-    system2_quiet('makeindex', shQuote(idx), error = {
-      stop("Failed to build the index via makeindex", call. = FALSE)
+    idx_engine = getOption('tinytex.makeindex', 'makeindex')
+    system2_quiet(idx_engine, c(getOption('tinytex.makeindex.args'), shQuote(idx)), error = {
+      stop("Failed to build the index via ", idx_engine, call. = FALSE)
     })
   }
   # generate bibliography
@@ -386,7 +396,7 @@ detect_files = function(text) {
     '.*! The font "([^"]+)" cannot be found.*',
     '.*!.+ error:.+\\(file ([^)]+)\\): .*',
     '.*Package widetext error: Install the ([^ ]+) package.*',
-    ".* File `(.+eps-converted-to.pdf)' not found",
+    ".* File `(.+eps-converted-to.pdf)'.*",
     ".*! LaTeX Error: File `([^']+)' not found.*",
     ".* file '([^']+)' not found.*",
     '.*the language definition file ([^ ]+) .*',
@@ -426,6 +436,11 @@ updmap = function(usermode = FALSE) {
 fmtutil = function(usermode = FALSE) {
   tweak_path()
   system2(if (usermode) 'fmtutil-user' else 'fmtutil-sys', '--all')
+}
+
+fc_cache = function(args = c('-v', '-r')) {
+  tweak_path()
+  system2('fc-cache', args)
 }
 
 # look up files in the Kpathsea library, e.g., kpsewhich('Sweave.sty')

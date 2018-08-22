@@ -62,7 +62,8 @@ install_tinytex = function(
     setwd(owd)
     p = Sys.which('tlmgr')
     if (os == 'windows') message(
-      'Restart your R session and check if tinytex:::is_tinytex() is TRUE.'
+      'Please restart your R session and IDE (if you are using one, such as RStudio or Emacs) ',
+      'and check if tinytex:::is_tinytex() is TRUE.'
     ) else if (!is_tinytex()) warning(
       'TinyTeX was not successfully installed or configured.',
       if (p != '') c(' tlmgr was found at ', p) else {
@@ -131,10 +132,9 @@ install_tinytex = function(
       in_dir(list.files('.', '^install-tl-.*'), {
         message('Starting to install TinyTeX to ', target, '. It will take a few minutes.')
         (if (interactive()) function(msg) utils::winDialog('ok', msg) else message)(paste0(
-          'Next you may see two error dialog boxs about the missing luatex.dll, ',
+          'Next you may see two error dialog boxes about the missing luatex.dll, ',
           'and an error message like "Use of uninitialized value in bitwise or (|)..." in the end. ',
-          'These messages can be ignored. When installation is complete, ',
-          'please restart ', if (Sys.getenv('RSTUDIO') != '') 'RStudio' else 'R', '.'
+          'These messages can be ignored.',
         ))
         bat = readLines('install-tl-windows.bat')
         # never PAUSE (no way to interact with the Windows shell from R)
@@ -195,9 +195,12 @@ reinstall_tinytex = function(packages = TRUE, dir = texlive_root(), ...) {
   install_tinytex(extra_packages = pkgs, dir = dir, ...)
 }
 
-win_app_dir = function(...) {
+win_app_dir = function(..., error = TRUE) {
   d = Sys.getenv('APPDATA')
-  if (d == '') stop('Environment variable "APPDATA" not set.')
+  if (d == '') {
+    if (error) stop('Environment variable "APPDATA" not set.')
+    return(d)
+  }
   file.path(d, ...)
 }
 
@@ -256,4 +259,23 @@ dir_copy = function(from, to) {
 install_yihui_pkgs = function() {
   pkgs = readLines('https://github.com/yihui/tinytex/raw/master/tools/pkgs-yihui.txt')
   tlmgr_install(pkgs)
+}
+
+# install a prebuilt version of TinyTeX
+install_prebuilt = function() {
+  if (is_windows()) {
+    installer = 'TinyTeX.zip'
+    xfun::download_file('https://ci.appveyor.com/api/projects/yihui/tinytex/artifacts/TinyTeX.zip', installer)
+    install_windows_zip(installer)
+  } else if (is_linux()) {
+    system('wget -qO- https://github.com/yihui/tinytex/raw/master/tools/download-travis-linux.sh | sh')
+  } else {
+    stop('TinyTeX was not prebuilt for this platform.')
+  }
+}
+
+# if you have already downloaded the zip archive, use this function to install it
+install_windows_zip = function(path = 'TinyTeX.zip') {
+  unzip(path, exdir =  win_app_dir())
+  tlmgr_path(); texhash(); fmtutil(); updmap(); fc_cache()
 }
