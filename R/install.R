@@ -3,7 +3,10 @@
 #' The function \code{install_tinytex()} downloads the installation script from
 #' \url{https://github.com/yihui/tinytex} according to the platform (Unix or
 #' Windows), and executes it to install TinyTeX (a custom LaTeX distribution
-#' based on TeX Live). The function \code{uninstall_tinytex()} removes TinyTeX.
+#' based on TeX Live). The function \code{uninstall_tinytex()} removes TinyTeX;
+#' \code{reinstall_tinytex()} reinstalls TinyTeX as well as previously installed
+#' LaTeX packages by default; \code{tinytex_root()} returns the root directory
+#' of TinyTeX.
 #' @param force Whether to force to install (override) or uninstall TinyTeX.
 #' @param dir The directory to install or uninstall TinyTeX (should not exist
 #'   unless \code{force = TRUE}).
@@ -40,7 +43,7 @@ install_tinytex = function(
       system2('tlmgr', '--version')
       c(
         'Detected an existing tlmgr at ', Sys.which('tlmgr'), '. ',
-        'It seems TeX Live has been installed (check tinytex:::texlive_root()). '
+        'It seems TeX Live has been installed (check tinytex::tinytex_root()). '
       )
     } else if (Sys.which('pdftex') != '') {
       system2('pdftex', '--version')
@@ -134,7 +137,7 @@ install_tinytex = function(
         (if (interactive()) function(msg) utils::winDialog('ok', msg) else message)(paste0(
           'Next you may see two error dialog boxes about the missing luatex.dll, ',
           'and an error message like "Use of uninitialized value in bitwise or (|)..." in the end. ',
-          'These messages can be ignored.',
+          'These messages can be ignored.'
         ))
         bat = readLines('install-tl-windows.bat')
         # never PAUSE (no way to interact with the Windows shell from R)
@@ -171,7 +174,7 @@ install_tinytex = function(
 
 #' @rdname install_tinytex
 #' @export
-uninstall_tinytex = function(force = FALSE, dir = texlive_root()) {
+uninstall_tinytex = function(force = FALSE, dir = tinytex_root()) {
   tweak_path()
   if (dir == '') stop('TinyTeX does not seem to be installed.')
   if (!is_tinytex() && !force) stop(
@@ -189,7 +192,7 @@ uninstall_tinytex = function(force = FALSE, dir = texlive_root()) {
 #'   \code{packages = TRUE}).
 #' @rdname install_tinytex
 #' @export
-reinstall_tinytex = function(packages = TRUE, dir = texlive_root(), ...) {
+reinstall_tinytex = function(packages = TRUE, dir = tinytex_root(), ...) {
   pkgs = if (packages) tl_pkgs()
   uninstall_tinytex()
   install_tinytex(extra_packages = pkgs, dir = dir, ...)
@@ -204,14 +207,16 @@ win_app_dir = function(..., error = TRUE) {
   file.path(d, ...)
 }
 
-texlive_root = function() {
+#' @rdname install_tinytex
+#' @export
+tinytex_root = function() {
   tweak_path()
   path = Sys.which('tlmgr')
   if (path == '') return('')
   root_dir = function(path, ...) {
     dir = normalizePath(file.path(dirname(path), ...), mustWork = TRUE)
     if (!'bin' %in% list.files(dir)) stop(
-      dir, ' does not seem to be the root directory of TeXLive (no "bin/" dir under it)'
+      dir, ' does not seem to be the root directory of TeX Live (no "bin/" dir under it)'
     )
     dir
   }
@@ -234,7 +239,7 @@ symlink_root = function(path) {
 }
 
 is_tinytex = function() {
-  gsub('^[.]', '', tolower(basename(texlive_root()))) == 'tinytex'
+  gsub('^[.]', '', tolower(basename(tinytex_root()))) == 'tinytex'
 }
 
 in_dir = function(dir, expr) {
@@ -278,4 +283,55 @@ install_prebuilt = function() {
 install_windows_zip = function(path = 'TinyTeX.zip') {
   unzip(path, exdir =  win_app_dir())
   tlmgr_path(); texhash(); fmtutil(); updmap(); fc_cache()
+}
+
+#' Copy TinyTeX to another location and use it in another system
+#'
+#' The function \code{copy_tinytex()} copies the existing TinyTeX installation
+#' to another directory (e.g., a portable device like a USB stick). The function
+#' \code{use_tinytex()} runs \command{tlmgr path add} to add the copy of TinyTeX
+#' in an existing folder to the \code{PATH} variable of the current system, so
+#' that you can use utilities such as \command{tlmgr} and \command{pdflatex},
+#' etc.
+#' @param from The root directory of the TinyTeX installation. For
+#'   \code{copy_tinytex()}, the default value \code{tinytex_root()} should be a
+#'   reasonable guess if you installed TinyTeX via \code{install_tinytex()}. For
+#'   \code{use_tinytex()}, if \code{from} is not provided, a dialog for choosing
+#'   the directory interactively will pop up.
+#' @param to The destination directory where you want to make a copy of TinyTeX.
+#'   Like \code{from} in \code{use_tinytex()}, a dialog will pop up if \code{to}
+#'   is not provided in \code{copy_tinytex()}.
+#' @note You can only copy TinyTeX and use it in the same system, e.g., the
+#'   Windows version of TinyTeX only works on Windows.
+#' @export
+copy_tinytex = function(from = tinytex_root(), to = select_dir('Select Destination Directory')) {
+  if (!dir_exists(from)) stop('TinyTeX does not seem to be installed.')
+  if (length(to) != 1 || !dir_exists(to))
+    stop("The destination directory '", to, "' does not exist.")
+  file.copy(from, to, recursive = TRUE)
+}
+
+#' @rdname copy_tinytex
+#' @export
+use_tinytex = function(from = select_dir('Select TinyTeX Directory')) {
+  if (length(from) != 1) stop('Please provide a valid path to the TinyTeX directory.')
+  d = list.files(file.path(from, 'bin'), full.names = TRUE)
+  d = d[dir_exists(d)]
+  if (length(d) != 1) stop("The directory '", from, "' does not contain TinyTeX.")
+  p = file.path(d, 'tlmgr')
+  if (os == 'windows') p = paste0(p, '.bat')
+  if (system2(p, c('path', 'add')) != 0) stop(
+    "Failed to add '", d, "' to your system's environment variable PATH. You may ",
+    "consider the fallback approach, i.e., set options(tinytex.tlmgr.path = '", p, "')."
+  )
+  message('Restart R and your editor and check if tinytex::tinytex_root() points to ', from)
+}
+
+select_dir = function(caption = 'Select Directory') {
+  d = tryCatch(rstudioapi::selectDirectory(caption), error = function(e) {
+    if (os == 'windows') utils::choose.dir(caption = caption) else {
+      tcltk::tk_choose.dir(caption = caption)
+    }
+  })
+  if (!is.null(d) && !is.na(d)) d
 }
