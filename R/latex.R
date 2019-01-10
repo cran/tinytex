@@ -159,7 +159,7 @@ latexmk_emu = function(
   on.exit({
     files2 = exist_files(aux_files)
     files3 = setdiff(files2, files1)
-    if (keep_log) files3 = setdiff(files3, logfile)
+    if (keep_log || latex_warning(logfile)) files3 = setdiff(files3, logfile)
     if (clean) unlink(files3)
   }, add = TRUE)
 
@@ -302,6 +302,15 @@ show_latex_error = function(file, logfile = gsub('[.]tex$', '.log', basename(fil
   }
 }
 
+# whether a LaTeX log file contains warnings
+latex_warning = function(file) {
+  if (!file.exists(file)) return(FALSE)
+  x = readLines(file, warn = FALSE)
+  if (length(i <- grep(r <- '^LaTeX Warning:', x)) == 0) return(FALSE)
+  warning(paste(c('LaTeX Warning(s):', gsub(r, ' ', x[i])), collapse = '\n'), call. = FALSE)
+  TRUE
+}
+
 # check the version of latexmk
 check_latexmk_version = function() {
   out = system2('latexmk', '-v', stdout = TRUE)
@@ -405,7 +414,7 @@ detect_files = function(text) {
   # ! Package pdftex.def Error: File `logo-mdpi-eps-converted-to.pdf' not found
   r = c(
     ".*! Font [^=]+=([^ ]+).+ not loadable.*",
-    '.*! The font "([^"]+)" cannot be found.*',
+    '.*! .*The font "([^"]+)" cannot be found.*',
     '.*!.+ error:.+\\(file ([^)]+)\\): .*',
     '.*Package widetext error: Install the ([^ ]+) package.*',
     ".* File `(.+eps-converted-to.pdf)'.*",
