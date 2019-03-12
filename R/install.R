@@ -18,7 +18,6 @@
 #'   installed.
 #' @references See the TinyTeX documentation (\url{https://yihui.name/tinytex/})
 #'   for the default installation directories on different platforms.
-#' @importFrom xfun download_file
 #' @export
 install_tinytex = function(
   force = FALSE, dir = 'auto', repository = 'ctan', extra_packages = NULL
@@ -38,35 +37,32 @@ install_tinytex = function(
     user_dir = normalizePath(dir, mustWork = FALSE)
   }
   tweak_path()
-  if (!force) {
-    msg = if (tlmgr_available()) {
-      system2('tlmgr', '--version')
-      c(
-        'Detected an existing tlmgr at ', Sys.which('tlmgr'), '. ',
-        'It seems TeX Live has been installed (check tinytex::tinytex_root()). '
-      )
-    } else if (Sys.which('pdftex') != '') {
-      system2('pdftex', '--version')
-      c(
-        'Detected an existing LaTeX distribution (e.g., pdftex is at ',
-        Sys.which('pdftex'), '). '
-      )
-    }
-    if (length(msg)) stop(
-      msg, 'You have to uninstall it, or use install_tinytex(force = TRUE) ',
-      'if you are sure TinyTeX can override it (e.g., you are a PATH expert or ',
-      'installed TinyTeX previously).',
-      call. = FALSE
+  msg = if (tlmgr_available()) {
+    system2('tlmgr', '--version')
+    c(
+      'Detected an existing tlmgr at ', Sys.which('tlmgr'), '. ',
+      'It seems TeX Live has been installed (check tinytex::tinytex_root()). '
+    )
+  } else if (Sys.which('pdftex') != '') {
+    system2('pdftex', '--version')
+    c(
+      'Detected an existing LaTeX distribution (e.g., pdftex is at ',
+      Sys.which('pdftex'), '). '
     )
   }
+  if (length(msg)) warning(
+    msg, 'You are recommended to uninstall it, although TinyTeX should work well alongside ',
+    'another LaTeX distribution if a LaTeX document is compiled through tinytex::latexmk().',
+    call. = FALSE
+  )
   owd = setwd(tempdir())
   on.exit({
     unlink(c('install-unx.sh', 'install-tl.zip', 'pkgs-custom.txt', 'texlive.profile'))
     setwd(owd)
     p = Sys.which('tlmgr')
     if (os == 'windows') message(
-      'Please restart your R session and IDE (if you are using one, such as RStudio or Emacs) ',
-      'and check if tinytex:::is_tinytex() is TRUE.'
+      'Please quit and reopen your R session and IDE (if you are using one, such ',
+      'as RStudio or Emacs) and check if tinytex:::is_tinytex() is TRUE.'
     ) else if (!is_tinytex()) warning(
       'TinyTeX was not successfully installed or configured.',
       if (p != '') c(' tlmgr was found at ', p) else {
@@ -80,6 +76,12 @@ install_tinytex = function(
   }
   https = grepl('^https://', repository)
 
+  if ((texinput <- Sys.getenv('TEXINPUT')) != '') message(
+    'Your environment variable TEXINPUT is "', texinput,
+    '". Normally you should not set this variable, because it may lead to issues like ',
+    'https://github.com/yihui/tinytex/issues/92.'
+  )
+
   switch(
     os,
     'unix' = {
@@ -91,17 +93,17 @@ install_tinytex = function(
       if (macos && file.access('/usr/local/bin', 2) != 0) {
         chown_cmd = 'chown -R `whoami`:admin /usr/local/bin'
         message(
-          'The directory /usr/local/bin is not writable. I need your admin privilege ',
-          'to make it writable. See https://github.com/yihui/tinytex/issues/24 for more info.'
+          'The directory /usr/local/bin is not writable. I recommend that you ',
+          'make it writable. See https://github.com/yihui/tinytex/issues/24 for more info.'
         )
         if (system(sprintf(
           "/usr/bin/osascript -e 'do shell script \"%s\" with administrator privileges'", chown_cmd
-          )) != 0) stop(
-          "Please run this command in your Terminal and retry installing TinyTeX:\n  sudo ",
+        )) != 0) warning(
+          "Please run this command in your Terminal (password required):\n  sudo ",
           chown_cmd, call. = FALSE
         )
       }
-      if (!macos && !dir_exists('~/bin')) on.exit(message(
+      if (!macos && dir_exists('~/bin')) on.exit(message(
         'You may have to restart your system after installing TinyTeX to make sure ',
         '~/bin appears in your PATH variable (https://github.com/yihui/tinytex/issues/16).'
       ), add = TRUE)
@@ -267,6 +269,10 @@ dir_copy = function(from, to) {
     unlink(from, recursive = TRUE) == 0
 }
 
+download_file = function(...) {
+  xfun::download_file(..., quiet = Sys.getenv('APPVEYOR') != '')
+}
+
 # LaTeX packages that I use
 install_yihui_pkgs = function() {
   pkgs = readLines('https://github.com/yihui/tinytex/raw/master/tools/pkgs-yihui.txt')
@@ -277,7 +283,7 @@ install_yihui_pkgs = function() {
 install_prebuilt = function() {
   if (is_windows()) {
     installer = 'TinyTeX.zip'
-    xfun::download_file('https://ci.appveyor.com/api/projects/yihui/tinytex/artifacts/TinyTeX.zip', installer)
+    download_file('https://ci.appveyor.com/api/projects/yihui/tinytex/artifacts/TinyTeX.zip', installer)
     install_windows_zip(installer)
   } else if (is_linux()) {
     system('wget -qO- https://github.com/yihui/tinytex/raw/master/tools/download-travis-linux.sh | sh')
