@@ -30,7 +30,7 @@ install_tinytex = function(
     )
   }
   user_dir = ''
-  if (!missing(dir)) {
+  if (!(dir %in% c('', 'auto'))) {
     dir = gsub('[/\\]+$', '', dir)  # remove trailing slashes
     check_dir(dir)
     unlink(dir, recursive = TRUE)
@@ -160,7 +160,7 @@ install_tinytex = function(
           grep('^pause\\s*$', bat, ignore.case = TRUE, invert = TRUE, value = TRUE),
           'install-tl-windows.bat'
         )
-        shell('install-tl-windows.bat -profile=../tinytex.profile', invisible = FALSE)
+        shell('install-tl-windows.bat -no-gui -profile=../tinytex.profile', invisible = FALSE)
         file.remove('TinyTeX/install-tl.log')
         dir.create(target, showWarnings = FALSE, recursive = TRUE)
         file.copy(list.files('TinyTeX', full.names = TRUE), target, recursive = TRUE)
@@ -209,6 +209,25 @@ uninstall_tinytex = function(force = FALSE, dir = tinytex_root()) {
 #' @export
 reinstall_tinytex = function(packages = TRUE, dir = tinytex_root(), ...) {
   pkgs = if (packages) tl_pkgs()
+  if (length(pkgs)) message(
+    'If reinstallation fails, try install_tinytex() again. Then ',
+    'install the following packages:\n\ntinytex::tlmgr_install(c(',
+    paste('"', pkgs, '"', sep = '', collapse = ', '), '))\n'
+  )
+  # in theory, users should not touch the texmf-local dir; if they did, I'll try
+  # to preserve it during reinstall: https://github.com/yihui/tinytex/issues/117
+  if (length(list.files(texmf <- file.path(dir, 'texmf-local'), recursive = TRUE)) > 0) {
+    dir.create(texmf_tmp <- tempfile(), recursive = TRUE)
+    message(
+      'The directory ', texmf, ' is not empty. It will be backed up to ',
+      texmf_tmp, ' and restored later.\n'
+    )
+    file.copy(texmf, texmf_tmp, recursive = TRUE)
+    on.exit(
+      file.copy(file.path(texmf_tmp, basename(texmf)), dirname(texmf), recursive = TRUE),
+      add = TRUE
+    )
+  }
   uninstall_tinytex()
   install_tinytex(extra_packages = pkgs, dir = dir, ...)
 }
