@@ -238,7 +238,7 @@ latexmk_emu = function(
   }
   for (i in seq_len(times)) {
     if (file.exists(logfile)) {
-      if (!any(grepl('(Rerun to get|Please \\(re\\)run) ', readLines(logfile), useBytes = TRUE))) break
+      if (!needs_rerun(logfile)) break
     } else warning('The LaTeX log file "', logfile, '" is not found')
     run_engine()
   }
@@ -259,6 +259,13 @@ tweak_aux = function(aux, x = readLines(aux)) {
   if (length(i <- grep(r, x)) == 0) return()
   x[i] = gsub('[.]bib([,}])', '\\1', x[i])
   writeLines(x, aux)
+}
+
+needs_rerun = function(log) {
+  any(grepl(
+    '(Rerun to get |Please \\(re\\)run | Rerun LaTeX\\.)', readLines(log),
+    useBytes = TRUE
+  ))
 }
 
 system2_quiet = function(..., error = NULL, fail_rerun = TRUE) {
@@ -466,17 +473,23 @@ detect_files = function(text) {
   # Package widetext error: Install the flushend package which is a part of sttools
   # Package biblatex Info: ... file 'trad-abbrv.bbx' not found
   # ! Package pdftex.def Error: File `logo-mdpi-eps-converted-to.pdf' not found
+  # ! Package tikz Error: I did not find the tikz library 'hobby'... named tikzlibraryhobby.code.tex
+  # support file `supp-pdf.mkii' (supp-pdf.tex) is missing
   r = c(
     ".*! Font [^=]+=([^ ]+).+ not loadable.*",
     '.*! .*The font "([^"]+)" cannot be found.*',
     '.*!.+ error:.+\\(file ([^)]+)\\): .*',
     '.*Package widetext error: Install the ([^ ]+) package.*',
+    # the above are messages about missing fonts; below are typically missing .sty or commands
+
     ".* File `(.+eps-converted-to.pdf)'.*",
     ".*! LaTeX Error: File `([^']+)' not found.*",
     ".* file '([^']+)' not found.*",
     '.*the language definition file ([^ ]+) .*',
     '.* \\(file ([^)]+)\\): cannot open .*',
+    ".*file `([^']+)' .*is missing.*",
     ".*! CTeX fontset `([^']+)' is unavailable.*",
+    '.* (tikzlibrary[^.]+[.]code[.]tex).*',
     ".*: ([^:]+): command not found.*"
   )
   x = grep(paste(r, collapse = '|'), text, value = TRUE)
