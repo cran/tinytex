@@ -7,8 +7,12 @@
 \alias{tinytex_root}
 \title{Install/Uninstall TinyTeX}
 \usage{
-install_tinytex(force = FALSE, dir = "auto", repository = "ctan",
-  extra_packages = NULL)
+install_tinytex(
+  force = FALSE,
+  dir = "auto",
+  repository = "ctan",
+  extra_packages = NULL
+)
 
 uninstall_tinytex(force = FALSE, dir = tinytex_root())
 
@@ -49,6 +53,6 @@ LaTeX packages by default; \code{tinytex_root()} returns the root directory
 of TinyTeX.
 }
 \references{
-See the TinyTeX documentation (\url{https://yihui.name/tinytex/})
+See the TinyTeX documentation (\url{https://yihui.org/tinytex/})
   for the default installation directories on different platforms.
 }

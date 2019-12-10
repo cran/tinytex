@@ -12,16 +12,24 @@
 \usage{
 tlmgr(args = character(), usermode = FALSE, ..., .quiet = FALSE)
 
-tlmgr_search(what, file = TRUE, all = FALSE, global = TRUE,
-  word = FALSE, ...)
+tlmgr_search(what, file = TRUE, all = FALSE, global = TRUE, word = FALSE, ...)
 
-tlmgr_install(pkgs = character(), usermode = FALSE, path = !usermode
-  && os != "windows")
+tlmgr_install(
+  pkgs = character(),
+  usermode = FALSE,
+  path = !usermode && os != "windows"
+)
 
 tlmgr_remove(pkgs = character(), usermode = FALSE)
 
-tlmgr_update(all = TRUE, self = TRUE, more_args = character(),
-  usermode = FALSE, run_fmtutil = TRUE)
+tlmgr_update(
+  all = TRUE,
+  self = TRUE,
+  more_args = character(),
+  usermode = FALSE,
+  run_fmtutil = TRUE,
+  ...
+)
 
 tlmgr_path(action = c("add", "remove"))
 
@@ -40,8 +48,9 @@ which you do not have write permission. This option should not be needed on
 personal computers, and has some limitations, so please read the
 \pkg{tlmgr} manual very carefully before using it.}
 
-\item{...}{Additional arguments passed to \code{\link{system2}()} (e.g.,
-\code{stdout = TRUE} to capture stdout).}
+\item{...}{For \code{tlmgr()}, additional arguments to be passed to
+\code{\link{system2}()} (e.g., \code{stdout = TRUE} to capture stdout). For
+other functions, arguments to be passed to \code{tlmgr()}.}
 
 \item{.quiet}{Whether to hide the actual command before executing it.}
 
@@ -95,7 +104,7 @@ tlmgr_search('titling.sty')
 #' tlmgr_search('/titling.sty')
 
 #' use a regular expression if you want to be more precise, e.g.
-#' tlmgr_search('/titling\\\\.sty$')
+#' tlmgr_search('/titling\\.sty$')
 
 # list all installed LaTeX packages
 tlmgr(c('info', '--list', '--only-installed', '--data', 'name'))
