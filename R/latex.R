@@ -172,13 +172,14 @@ latexmk_emu = function(
 
   pkgs_last = character()
   filep = sub('.log$', if (engine == 'latex') '.dvi' else '.pdf', logfile)
+  verbose = getOption('tinytex.verbose', FALSE)
   run_engine = function() {
     on_error  = function() {
       if (install_packages && file.exists(logfile)) {
-        pkgs = parse_packages(logfile, quiet = c(TRUE, FALSE, FALSE))
+        pkgs = parse_packages(logfile, quiet = !verbose)
         if (length(pkgs) && !identical(pkgs, pkgs_last)) {
-          message('Trying to automatically install missing LaTeX packages...')
-          if (tlmgr_install(pkgs) == 0) {
+          if (verbose) message('Trying to automatically install missing LaTeX packages...')
+          if (tlmgr_install(pkgs, .quiet = !verbose) == 0) {
             pkgs_last <<- pkgs
             return(run_engine())
           }
@@ -194,7 +195,7 @@ latexmk_emu = function(
           run_fmtutil = FALSE, .quiet = TRUE, stdout = FALSE, stderr = FALSE
         )
         on_error()
-      }, logfile = logfile, fail_rerun = getOption('tinytex.verbose', FALSE)
+      }, logfile = logfile, fail_rerun = verbose
     )
     # PNAS you are the worst! Why don't you singal an error in case of missing packages?
     if (res == 0 && !file.exists(filep)) on_error()
@@ -310,7 +311,7 @@ use_file_stdout = function() {
 show_latex_error = function(
   file, logfile = gsub('[.]tex$', '.log', basename(file)), force = FALSE
 ) {
-  e = c('Failed to compile ', file, '. See https://yihui.org/tinytex/r/#debugging for debugging tips.')
+  e = c('LaTeX failed to compile ', file, '. See https://yihui.org/tinytex/r/#debugging for debugging tips.')
   if (!file.exists(logfile)) stop(e, call. = FALSE)
   x = readLines(logfile, warn = FALSE)
   b = grep('^\\s*$', x)  # blank lines
@@ -500,13 +501,14 @@ detect_files = function(text) {
     ".* File `(.+eps-converted-to.pdf)'.*",
     ".*xdvipdfmx:fatal: pdf_ref_obj.*",
 
+    '.* (tikzlibrary[^.]+[.]code[.]tex).*',
+
     ".*! LaTeX Error: File `([^']+)' not found.*",
-    ".* file '?([^' ]+)'? not found.*",
+    ".* file ['`]?([^' ]+)'? not found.*",
     '.*the language definition file ([^ ]+) .*',
     '.* \\(file ([^)]+)\\): cannot open .*',
     ".*file `([^']+)' .*is missing.*",
     ".*! CTeX fontset `([^']+)' is unavailable.*",
-    '.* (tikzlibrary[^.]+[.]code[.]tex).*',
     ".*: ([^:]+): command not found.*"
   )
   x = grep(paste(r, collapse = '|'), text, value = TRUE)
@@ -514,6 +516,7 @@ detect_files = function(text) {
     z = grep(p, x, value = TRUE)
     v = gsub(p, '\\1', z)
     if (length(v) == 0) return(v)
+    if (p == r[8] && length(grep('! Package tikz Error:', text)) == 0) return()
     if (!(p %in% r[1:5])) return(if (p %in% r[6:7]) 'epstopdf' else v)
     if (p == r[4]) paste0(v, '.sty') else font_ext(v)
   })))
@@ -524,13 +527,18 @@ parse_install = function(...) {
   tlmgr_install(parse_packages(...))
 }
 
-# check missfont.log and detect the missing font packages
+# check missfont.log and detect the missing font packages; missfont.log
+# typically looks like this:
+#   mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm0900
 miss_font = function() {
   if (!file.exists(f <- 'missfont.log')) return()
   on.exit(unlink(f), add = TRUE)
   x = gsub('\\s*$', '', readLines(f))
-  x = unique(gsub('.+\\s+', '', x))
-  if (length(x)) font_ext(x)
+  x = grep('.+\\s+.+', x, value = TRUE)
+  if (length(x) == 0) return()
+  x1 = gsub('.+\\s+', '', x)  # possibly missing fonts
+  x2 = gsub('\\s+.+', '', x)  # the command to make fonts
+  unique(c(font_ext(x1), x2))
 }
 
 font_ext = function(x) {
