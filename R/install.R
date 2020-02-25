@@ -19,11 +19,14 @@
 #'   list of mirrors at \url{https://ctan.org/mirrors}.
 #' @param extra_packages A character vector of extra LaTeX packages to be
 #'   installed.
+#' @param add_path Whether to run the command \command{tlmgr path add} to add
+#'   the bin path of TeX Live to the system environment variable \var{PATH}.
 #' @references See the TinyTeX documentation (\url{https://yihui.org/tinytex/})
 #'   for the default installation directories on different platforms.
 #' @export
 install_tinytex = function(
-  force = FALSE, dir = 'auto', repository = 'ctan', extra_packages = NULL
+  force = FALSE, dir = 'auto', repository = 'ctan', extra_packages = NULL,
+  add_path = TRUE
 ) {
   if (!is.logical(force)) stop('The argument "force" must take a logical value.')
   check_dir = function(dir) {
@@ -135,7 +138,7 @@ install_tinytex = function(
         target = user_dir
       }
       bin = file.path(list.files(file.path(target, 'bin'), full.names = TRUE), 'tlmgr')
-      system2(bin, c('path', 'add'))
+      if (add_path) system2(bin, c('path', 'add'))
       if (length(extra_packages)) system2(bin, c('install', extra_packages))
       add_texmf(bin)
       message('TinyTeX installed to ', target)
@@ -184,7 +187,7 @@ install_tinytex = function(
           }
         }
         tlmgr(c('install', 'latex-bin', 'xetex', pkgs_custom, extra_packages))
-        tlmgr(c('path', 'add'))
+        if (add_path) tlmgr(c('path', 'add'))
         add_texmf(bin_tlmgr)
       })
       message('TinyTeX installed to ', target)
@@ -204,7 +207,7 @@ uninstall_tinytex = function(force = FALSE, dir = tinytex_root()) {
   )
   r_texmf('remove')
   tlmgr_path('remove')
-  unlink(dir, recursive = TRUE)
+  unlink(c(dir, path.expand('~/.TinyTeX')), recursive = TRUE)
 }
 
 #' @param packages Whether to reinstall all currently installed packages.
@@ -278,9 +281,9 @@ symlink_root = function(path) {
   in_dir(dirname(path), symlink_root(path2))
 }
 
-is_tinytex = function() {
+is_tinytex = function() tryCatch({
   gsub('^[.]', '', tolower(basename(tinytex_root()))) == 'tinytex'
-}
+}, error = function(e) FALSE)
 
 in_dir = function(dir, expr) {
   owd = setwd(dir); on.exit(setwd(owd), add = TRUE)

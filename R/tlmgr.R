@@ -37,9 +37,9 @@
 #' tlmgr(c('info', '--list', '--only-installed', '--data', 'name'))
 tlmgr = function(args = character(), usermode = FALSE, ..., .quiet = FALSE) {
   tweak_path()
-  if (!.quiet && !tlmgr_available()) {
-    warning('TeX Live does not seem to be installed. See https://yihui.org/tinytex/.')
-  }
+  if (!.quiet && !tlmgr_available()) warning(
+    '\nTeX Live does not seem to be installed. See https://yihui.org/tinytex/.\n'
+  )
   if (usermode) args = c('--usermode', args)
   if (!.quiet) message(paste(c('tlmgr', args), collapse = ' '))
   system2('tlmgr', args, ...)
@@ -102,23 +102,33 @@ tlmgr_search = function(what, file = TRUE, all = FALSE, global = TRUE, word = FA
 #' @rdname tlmgr
 #' @export
 tlmgr_install = function(pkgs = character(), usermode = FALSE, path = !usermode && os != 'windows', ...) {
-  res = 0L
-  if (length(pkgs)) {
+  if (length(pkgs) == 0) return(invisible(0L))
+
+  res = tlmgr(c('install', pkgs), usermode, ...)
+  if (res != 0 || !check_installed(pkgs)) {
+    tlmgr_update(all = FALSE, usermode = usermode)
     res = tlmgr(c('install', pkgs), usermode, ...)
-    if (res != 0 || tl_list(pkgs, stdout = FALSE, stderr = FALSE, .quiet = TRUE) != 0) {
-      tlmgr_update(all = FALSE, usermode = usermode)
-      res = tlmgr(c('install', pkgs), usermode, ...)
-    }
-    if ('epstopdf' %in% pkgs && is_unix() && Sys.which('gs') == '') {
-      if (is_macos() && Sys.which('brew') != '') {
-        message('Trying to install GhostScript via Homebrew for the epstopdf package.')
-        system('brew install ghostscript')
-      }
-      if (Sys.which('gs') == '') warning('GhostScript is required for the epstopdf package.')
-    }
-    if (path) tlmgr_path('add')
   }
+  if ('epstopdf' %in% pkgs && is_unix() && Sys.which('gs') == '') {
+    if (is_macos() && Sys.which('brew') != '') {
+      message('Trying to install GhostScript via Homebrew for the epstopdf package.')
+      system('brew install ghostscript')
+    }
+    if (Sys.which('gs') == '') warning('GhostScript is required for the epstopdf package.')
+  }
+  if (path) tlmgr_path('add')
   invisible(res)
+}
+
+# check of certain LaTeX packages are installed: if installed, `tlmgr info pkgs`
+# should return `pkgs`
+check_installed = function(pkgs) {
+  if (length(pkgs) == 0) return(TRUE)
+  res = tryCatch(
+    tl_list(pkgs, stdout = TRUE, stderr = FALSE, .quiet = TRUE),
+    error = function(e) NULL, warning = function(e) NULL
+  )
+  identical(res, pkgs)
 }
 
 #' @rdname tlmgr
