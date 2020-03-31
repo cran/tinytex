@@ -153,7 +153,10 @@ install_tinytex = function(
       download_file('https://yihui.org/gh/tinytex/tools/pkgs-custom.txt')
       pkgs_custom = readLines('pkgs-custom.txt')
       download_file('https://yihui.org/gh/tinytex/tools/tinytex.profile')
-      x = readLines('tinytex.profile')
+      x = c(
+        readLines('tinytex.profile'), 'TEXMFCONFIG $TEXMFSYSCONFIG',
+        'TEXMFHOME $TEXMFLOCAL', 'TEXMFVAR $TEXMFSYSVAR'
+      )
       writeLines(gsub('./', './TinyTeX/', x, fixed = TRUE), 'tinytex.profile')
       unzip('install-tl.zip')
       in_dir(list.files('.', '^install-tl-.*'), {
@@ -190,7 +193,6 @@ install_tinytex = function(
         if (add_path) tlmgr(c('path', 'add'))
         add_texmf(bin_tlmgr)
       })
-      message('TinyTeX installed to ', target)
     },
     stop('This platform is not supported.')
   )
@@ -207,7 +209,15 @@ uninstall_tinytex = function(force = FALSE, dir = tinytex_root()) {
   )
   r_texmf('remove')
   tlmgr_path('remove')
-  unlink(c(dir, path.expand('~/.TinyTeX')), recursive = TRUE)
+  delete_texmf_user()
+  unlink(dir, recursive = TRUE)
+}
+
+# delete user's texmf tree
+delete_texmf_user = function() {
+  r = dir.exists(d <- path.expand('~/.TinyTeX'))
+  unlink(d, recursive = TRUE)
+  r
 }
 
 #' @param packages Whether to reinstall all currently installed packages.
