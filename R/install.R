@@ -6,17 +6,20 @@
 #' based on TeX Live). The function \code{uninstall_tinytex()} removes TinyTeX;
 #' \code{reinstall_tinytex()} reinstalls TinyTeX as well as previously installed
 #' LaTeX packages by default; \code{tinytex_root()} returns the root directory
-#' of TinyTeX.
+#' of TinyTeX if found.
 #' @param force Whether to force to install (override) or uninstall TinyTeX.
 #' @param dir The directory to install or uninstall TinyTeX (should not exist
 #'   unless \code{force = TRUE}).
-#' @param repository The CTAN repository to be used. By default, a fast mirror
-#'   is automatically chosen. You can manually set one if the automatic mirror
-#'   is not really fast enough, e.g., if you are in China, you may consider
+#' @param repository The CTAN repository to be used. By default, a random fast
+#'   mirror is automatically chosen (via \code{http://mirror.ctan.org}). You can
+#'   manually set one if the automatic mirror is not really fast enough, e.g.,
+#'   if you are in China, you may consider
 #'   \code{'http://mirrors.tuna.tsinghua.edu.cn/CTAN/'}, or if you are in the
 #'   midwest in the US, you may use
 #'   \code{'https://mirror.las.iastate.edu/tex-archive/'}. You can find the full
-#'   list of mirrors at \url{https://ctan.org/mirrors}.
+#'   list of mirrors at \url{https://ctan.org/mirrors}. This argument should end
+#'   with the path \file{/systems/texlive/tlnet}, and if it is not, the path
+#'   will be automatically appended.
 #' @param extra_packages A character vector of extra LaTeX packages to be
 #'   installed.
 #' @param add_path Whether to run the command \command{tlmgr path add} to add
@@ -213,9 +216,15 @@ uninstall_tinytex = function(force = FALSE, dir = tinytex_root()) {
   unlink(dir, recursive = TRUE)
 }
 
-# delete user's texmf tree
+# delete user's texmf tree; don't delete ~/.TinyTeX if TinyTeX itself is
+# installed there
 delete_texmf_user = function() {
   r = dir.exists(d <- path.expand('~/.TinyTeX'))
+  if (!r) return(FALSE)
+  d1 = xfun::normalize_path(tinytex_root(error = FALSE))
+  if (d1 == '') return()  # not TinyTeX
+  d2 = xfun::normalize_path(d)
+  if (substr(d1, 1, nchar(d2)) == d2) return(FALSE)
   unlink(d, recursive = TRUE)
   r
 }
@@ -260,24 +269,25 @@ win_app_dir = function(..., error = TRUE) {
   file.path(d, ...)
 }
 
+#' @param error Whether to signal an error if TinyTeX is not found.
 #' @rdname install_tinytex
 #' @export
-tinytex_root = function() {
+tinytex_root = function(error = TRUE) {
   tweak_path()
   path = Sys.which('tlmgr')
   if (path == '') return('')
   root_dir = function(path, ...) {
     dir = normalizePath(file.path(dirname(path), ...), mustWork = TRUE)
-    if (!'bin' %in% list.files(dir)) stop(
+    if (!'bin' %in% list.files(dir)) if (error) stop(
       dir, ' does not seem to be the root directory of TeX Live (no "bin/" dir under it)'
-    )
+    ) else return('')
     dir
   }
   if (os == 'windows') return(root_dir(path, '..', '..'))
-  if (Sys.readlink(path) == '') stop(
+  if (Sys.readlink(path) == '') if (error) stop(
     'Cannot figure out the root directory of TeX Live from ', path,
     ' (not a symlink on ', os, ')'
-  )
+  ) else return('')
   path = symlink_root(path)
   root_dir(normalizePath(path), '..', '..', '..')
 }

@@ -19,7 +19,7 @@ uninstall_tinytex(force = FALSE, dir = tinytex_root())
 
 reinstall_tinytex(packages = TRUE, dir = tinytex_root(), ...)
 
-tinytex_root()
+tinytex_root(error = TRUE)
 }
 \arguments{
 \item{force}{Whether to force to install (override) or uninstall TinyTeX.}
@@ -27,13 +27,16 @@ tinytex_root()
 \item{dir}{The directory to install or uninstall TinyTeX (should not exist
 unless \code{force = TRUE}).}
 
-\item{repository}{The CTAN repository to be used. By default, a fast mirror
-is automatically chosen. You can manually set one if the automatic mirror
-is not really fast enough, e.g., if you are in China, you may consider
+\item{repository}{The CTAN repository to be used. By default, a random fast
+mirror is automatically chosen (via \code{http://mirror.ctan.org}). You can
+manually set one if the automatic mirror is not really fast enough, e.g.,
+if you are in China, you may consider
 \code{'http://mirrors.tuna.tsinghua.edu.cn/CTAN/'}, or if you are in the
 midwest in the US, you may use
 \code{'https://mirror.las.iastate.edu/tex-archive/'}. You can find the full
-list of mirrors at \url{https://ctan.org/mirrors}.}
+list of mirrors at \url{https://ctan.org/mirrors}. This argument should end
+with the path \file{/systems/texlive/tlnet}, and if it is not, the path
+will be automatically appended.}
 
 \item{extra_packages}{A character vector of extra LaTeX packages to be
 installed.}
@@ -46,6 +49,8 @@ the bin path of TeX Live to the system environment variable \var{PATH}.}
 \item{...}{Other arguments to be passed to \code{install_tinytex()} (note
 that the \code{extra_packages} argument will be set to \code{tl_pkgs()} if
 \code{packages = TRUE}).}
+
+\item{error}{Whether to signal an error if TinyTeX is not found.}
 }
 \description{
 The function \code{install_tinytex()} downloads the installation script from
@@ -54,7 +59,7 @@ Windows), and executes it to install TinyTeX (a custom LaTeX distribution
 based on TeX Live). The function \code{uninstall_tinytex()} removes TinyTeX;
 \code{reinstall_tinytex()} reinstalls TinyTeX as well as previously installed
 LaTeX packages by default; \code{tinytex_root()} returns the root directory
-of TinyTeX.
+of TinyTeX if found.
 }
 \references{
 See the TinyTeX documentation (\url{https://yihui.org/tinytex/})

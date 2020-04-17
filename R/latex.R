@@ -168,6 +168,7 @@ latexmk_emu = function(
     files3 = setdiff(files2, files1)
     if (keep_log || length(latex_warning(logfile, TRUE))) files3 = setdiff(files3, logfile)
     if (clean) unlink(files3)
+    .global$update_noted = NULL
   }, add = TRUE)
 
   pkgs_last = character()
@@ -194,9 +195,7 @@ latexmk_emu = function(
     res = system2_quiet(
       engine, c('-halt-on-error', '-interaction=batchmode', engine_args, shQuote(file)),
       error = {
-        if (install_packages) tlmgr_update(
-          run_fmtutil = FALSE, .quiet = TRUE, stdout = FALSE, stderr = FALSE
-        )
+        if (install_packages) tlmgr_update(run_fmtutil = FALSE, .quiet = TRUE)
         on_error()
       }, logfile = logfile, fail_rerun = verbose
     )
@@ -525,7 +524,12 @@ detect_files = function(text) {
   })))
 }
 
-# a helper function that combines parse_packages() and tlmgr_install()
+#' Parse the LaTeX log and install missing LaTeX packages if possible
+#'
+#' This is a helper function that combines \code{\link{parse_packages}()} and
+#' \code{\link{tlmgr_install}()}.
+#' @param ... Arguments passed to \code{\link{parse_packages}()}.
+#' @export
 parse_install = function(...) {
   tlmgr_install(parse_packages(...))
 }
