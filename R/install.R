@@ -103,7 +103,7 @@ install_tinytex = function(
       if (Sys.which(downloader) == '') stop(sprintf(
         "'%s' is not found but required to install TinyTeX", downloader
       ), call. = FALSE)
-      if (macos && file.access('/usr/local/bin', 2) != 0) {
+      if (macos && !is_writable('/usr/local/bin')) {
         chown_cmd = 'chown -R `whoami`:admin /usr/local/bin'
         message(
           'The directory /usr/local/bin is not writable. I recommend that you ',
@@ -131,16 +131,14 @@ install_tinytex = function(
         )
       ))
       if (res != 0) stop('Failed to install TinyTeX', call. = FALSE)
-      target = normalizePath(
-        if (macos) '~/Library/TinyTeX' else '~/.TinyTeX'
-      )
+      target = normalizePath(default_inst)
       if (!dir_exists(target)) stop('Failed to install TinyTeX.')
       if (!user_dir %in% c('', target)) {
         dir.create(dirname(user_dir), showWarnings = FALSE, recursive = TRUE)
         dir_rename(target, user_dir)
         target = user_dir
       }
-      bin = file.path(list.files(file.path(target, 'bin'), full.names = TRUE), 'tlmgr')
+      bin = find_tlmgr(target)
       if (add_path) system2(bin, c('path', 'add'))
       if (length(extra_packages)) system2(bin, c('install', extra_packages))
       add_texmf(bin)
@@ -177,12 +175,14 @@ install_tinytex = function(
         )
         shell('install-tl-windows.bat -no-gui -profile=../tinytex.profile', invisible = FALSE)
         file.remove('TinyTeX/install-tl.log')
+        # target shouldn't be a file but a directory
+        if (file_test('-f', target)) file.remove(target)
         dir.create(target, showWarnings = FALSE, recursive = TRUE)
         file.copy(list.files('TinyTeX', full.names = TRUE), target, recursive = TRUE)
       })
       unlink('install-tl-*', recursive = TRUE)
       in_dir(target, {
-        bin_tlmgr = file.path('bin', 'win32', 'tlmgr')
+        bin_tlmgr = find_tlmgr('.')
         tlmgr = function(...) system2(bin_tlmgr, ...)
         if (not_ctan) {
           tlmgr(c('option', 'repository', shQuote(repository)))
@@ -199,6 +199,27 @@ install_tinytex = function(
     },
     stop('This platform is not supported.')
   )
+}
+
+win_app_dir = function(..., error = TRUE) {
+  d = Sys.getenv('APPDATA')
+  if (d == '') {
+    if (error) stop('Environment variable "APPDATA" not set.')
+    return(d)
+  }
+  file.path(d, ...)
+}
+
+os_index = if (is_windows()) 1 else if (is_linux()) 2 else if (is_macos()) 3
+
+default_inst = c(
+  win_app_dir('TinyTeX', error = FALSE), '~/.TinyTeX', '~/Library/TinyTeX'
+)[os_index]
+
+find_tlmgr = function(dir = default_inst) {
+  bin = file.path(list.files(file.path(dir, 'bin'), full.names = TRUE), 'tlmgr')
+  if (is_windows()) bin = paste0(bin, '.bat')
+  bin[file_test('-x', bin)][1]
 }
 
 #' @rdname install_tinytex
@@ -258,15 +279,6 @@ reinstall_tinytex = function(packages = TRUE, dir = tinytex_root(), ...) {
   }
   uninstall_tinytex()
   install_tinytex(extra_packages = pkgs, dir = dir, ...)
-}
-
-win_app_dir = function(..., error = TRUE) {
-  d = Sys.getenv('APPDATA')
-  if (d == '') {
-    if (error) stop('Environment variable "APPDATA" not set.')
-    return(d)
-  }
-  file.path(d, ...)
 }
 
 #' @param error Whether to signal an error if TinyTeX is not found.
@@ -334,22 +346,20 @@ install_yihui_pkgs = function() {
 }
 
 # install a prebuilt version of TinyTeX
-install_prebuilt = function() {
-  if (is_windows()) {
-    installer = 'TinyTeX.zip'
-    download_file('https://ci.appveyor.com/api/projects/yihui/tinytex/artifacts/TinyTeX.zip', installer)
-    install_windows_zip(installer)
-  } else if (is_linux()) {
-    system('wget -qO- https://yihui.org/gh/tinytex/tools/download-travis-linux.sh | sh')
-  } else {
-    stop('TinyTeX was not prebuilt for this platform.')
+install_prebuilt = function(path) {
+  if (missing(path)) path = paste0('TinyTeX.', c('zip', 'tar.gz', 'tgz')[os_index])
+  if (!file.exists(path)) download_installer(path)
+  extract = if (grepl('[.]zip$', path)) unzip else untar
+  extract(path, exdir = path.expand(dirname(default_inst)))
+  if (os_index == 2) {
+    dir.create('~/bin', FALSE, TRUE)
+    tlmgr(c('option', 'sys_bin', '~/bin'))
   }
+  tlmgr_path(); texhash(); fmtutil(stdout = FALSE); updmap(); fc_cache()
 }
 
-# if you have already downloaded the zip archive, use this function to install it
-install_windows_zip = function(path = 'TinyTeX.zip') {
-  unzip(path, exdir =  win_app_dir())
-  tlmgr_path(); texhash(); fmtutil(); updmap(); fc_cache()
+download_installer = function(file) {
+  download_file(paste0('https://yihui.org/tinytex/', file), file)
 }
 
 #' Copy TinyTeX to another location and use it in another system

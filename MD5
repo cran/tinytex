@@ -1,11 +1,11 @@
-70681d0a79dbbd2e15802bc327b6d7a8 *DESCRIPTION
+6e6e3eb4a0b18629e5788e352fdf1709 *DESCRIPTION
 138e2498e08ffd714d54bfc64b1ac83a *LICENSE
 ce603f0ada31f1705bab10d3edae2adc *NAMESPACE
-b3132a959f7afd42ff3ab5b8acf7c8e6 *R/install.R
-7e9c601c58b22afbd2917c7746e97ebe *R/latex.R
+f8b6ef936d7a01393cf911529e1b07fe *R/install.R
+047d8074716c06b7dc57bdec47b9ec8a *R/latex.R
 6cd7c2db9eb92736d67222c55d1f452e *R/package.R
-e45231102e03ffb10398c2c7882f97d2 *R/tlmgr.R
-23a4d616e4e8a66fa1321a52f135e05b *README.md
+de63015925053fdc555b5d12779a48e3 *R/tlmgr.R
+cab7652f9be00da1c54493a7adb3d26e *README.md
 07b1d67fc7523f46f234d2a78056943d *inst/CITATION
 a4aa863437c27133719365ac8a3fc840 *inst/NEWS.Rd
 d7dac0f18e52934ac844f0e2836eb115 *man/copy_tinytex.Rd
@@ -18,6 +18,7 @@ d7dac0f18e52934ac844f0e2836eb115 *man/copy_tinytex.Rd
 2ed377a2bbbd6ccb27b243484e77e2b8 *man/tl_sizes.Rd
 a487fb23889624ab4a14c99db7f30da6 *man/tlmgr.Rd
 adafda5ea0b62571a6766d4c95aaa065 *tests/test-cran.R
-325d0dd9770190bf9ff783f6d3caf13f *tests/test-cran/test-latex.R
+76952885e79386b270fca3e8bd8b5a75 *tests/test-cran/test-latex.R
 c31f780b68534a35399588ede74709d8 *tests/test-travis.R
+2a471b4188a5e56005856dd63daa5284 *tests/test-travis/test-packages.R
 58f9287cb2885d14c642355da92d22e0 *tests/test-travis/test-tlmgr.R

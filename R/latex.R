@@ -184,7 +184,7 @@ latexmk_emu = function(
             pkgs_last <<- pkgs
             return(run_engine())
           }
-        } else if (file.access(Sys.which('tlmgr'), 2) == 0) {
+        } else if (is_writable(Sys.which('tlmgr'))) {
           # chances are you are the sysadmin, and don't need ~/.TinyTeX
           if (delete_texmf_user()) return(run_engine())
         }
@@ -205,17 +205,23 @@ latexmk_emu = function(
   }
   run_engine()
   if (install_packages) check_babel(logfile)
+
+  # install commands like bibtex, biber, and makeindex if necessary
+  install_cmd = function(cmd) {
+    if (install_packages && Sys.which(cmd) == '') parse_install(file = cmd)
+  }
+
   # generate index
   if (file.exists(idx <- aux_files['idx'])) {
     idx_engine = getOption('tinytex.makeindex', 'makeindex')
+    install_cmd(idx_engine)
     system2_quiet(idx_engine, c(getOption('tinytex.makeindex.args'), shQuote(idx)), error = {
       stop("Failed to build the index via ", idx_engine, call. = FALSE)
     })
   }
   # generate bibliography
   bib_engine = match.arg(bib_engine)
-  if (install_packages && bib_engine == 'biber' && Sys.which('biber') == '')
-    tlmgr_install('biber')
+  install_cmd(bib_engine)
   aux = aux_files[if ((biber <- bib_engine == 'biber')) 'bcf' else 'aux']
   if (file.exists(aux)) {
     if (biber || require_bibtex(aux)) {
@@ -353,8 +359,9 @@ check_inline_math = function(x, f) {
 
 check_unicode = function(x) {
   if (length(grep('! Package inputenc Error: Unicode character', x))) message(
-    'Try other LaTeX engines instead (e.g., xelatex) if you are using pdflatex. ',
-    'For R Markdown users, see https://bookdown.org/yihui/rmarkdown/pdf-document.html'
+    'Try other LaTeX engines instead (e.g., xelatex) if you are using pdflatex.',
+    if ('rmarkdown' %in% loadedNamespaces())
+      ' See https://bookdown.org/yihui/rmarkdown-cookbook/latex-unicode.html'
   )
 }
 
@@ -492,6 +499,7 @@ detect_files = function(text) {
   # ! xdvipdfmx:fatal: pdf_ref_obj(): passed invalid object.
   # ! Package tikz Error: I did not find the tikz library 'hobby'... named tikzlibraryhobby.code.tex
   # support file `supp-pdf.mkii' (supp-pdf.tex) is missing
+  # ! I can't find file `hyph-de-1901.ec.tex'.
   r = c(
     ".*! Font [^=]+=([^ ]+).+ not loadable.*",
     '.*! .*The font "([^"]+)" cannot be found.*',
@@ -511,7 +519,8 @@ detect_files = function(text) {
     '.* \\(file ([^)]+)\\): cannot open .*',
     ".*file `([^']+)' .*is missing.*",
     ".*! CTeX fontset `([^']+)' is unavailable.*",
-    ".*: ([^:]+): command not found.*"
+    ".*: ([^:]+): command not found.*",
+    ".*! I can't find file `([^']+)'.*"
   )
   x = grep(paste(r, collapse = '|'), text, value = TRUE)
   if (length(x) > 0) unique(unlist(lapply(r, function(p) {
