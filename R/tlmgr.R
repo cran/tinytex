@@ -60,7 +60,7 @@ tweak_path = function() {
   bin = normalizePath(dirname(f))
   # if the pdftex from TinyTeX is already on PATH, no need to adjust the PATH
   if ((p <- Sys.which('pdftex')) != '') {
-    p2 = xfun::with_ext(file.path(bin, 'pdftex'), xfun::file_ext(p))
+    p2 = with_ext(file.path(bin, 'pdftex'), xfun::file_ext(p))
     if (xfun::same_path(p, p2)) return()
   }
   old = Sys.getenv('PATH')
@@ -123,12 +123,14 @@ tlmgr_install = function(pkgs = character(), usermode = FALSE, path = !usermode 
 # found from PATH is a symlink that links to another symlink (typically under
 # TinyTeX/bin/platform/tlmgr, which is typically a symlink to tlmgr.pl)
 need_add_path = function() {
-  (p <- Sys.which('tlmgr')) != '' && is_writable(p) &&
+  is_writable(p <- Sys.which('tlmgr')) &&
     (p2 <- Sys.readlink(p)) != '' && basename(Sys.readlink(p2)) == 'tlmgr.pl' &&
     basename(dirname(dirname(p2))) == 'bin'
 }
 
 is_writable = function(p) file.access(p, 2) == 0
+
+tlmgr_writable = function() is_writable(Sys.which('tlmgr'))
 
 # check of certain LaTeX packages are installed: if installed, `tlmgr info pkgs`
 # should return `pkgs`
@@ -220,8 +222,11 @@ tlmgr_conf = function(more_args = character()) {
 #'   \code{texmf} means.
 #' @export
 #' @examples
-#' r_texmf('remove')
-#' r_texmf('add')
+#' # running the code below will modify your texmf tree; please do not run
+#' # unless you know what it means
+#'
+#' # r_texmf('remove')
+#' # r_texmf('add')
 #'
 #' # all files under R's texmf tree
 #' list.files(file.path(R.home('share'), 'texmf'), recursive = TRUE, full.names = TRUE)

@@ -53,7 +53,9 @@
 #'   \code{options(tinytex.compile.max_times = 3)}.
 #' @param install_packages Whether to automatically install missing LaTeX
 #'   packages found by \code{\link{parse_packages}()} from the LaTeX log. This
-#'   argument is only for the emulation mode and TeX Live.
+#'   argument is only for the emulation mode and TeX Live. Its value can also be
+#'   set via the global option \code{tinytex.install_packages}, e.g.,
+#'   \code{options(tinytex.install_packages = FALSE)}.
 #' @param pdf_file Path to the PDF output file. By default, it is under the same
 #'   directory as the input \code{file} and also has the same base name. When
 #'   \code{engine == 'latex'}, this will be a DVI file.
@@ -66,7 +68,7 @@
 latexmk = function(
   file, engine = c('pdflatex', 'xelatex', 'lualatex', 'latex'),
   bib_engine = c('bibtex', 'biber'), engine_args = NULL, emulation = TRUE,
-  min_times = 1, max_times = 10, install_packages = emulation && tlmgr_available(),
+  min_times = 1, max_times = 10, install_packages = emulation && tlmgr_writable(),
   pdf_file = gsub('tex$', 'pdf', file), clean = TRUE
 ) {
   if (!grepl('[.]tex$', file))
@@ -89,6 +91,8 @@ latexmk = function(
   }
   if (missing(min_times)) min_times = getOption('tinytex.compile.min_times', min_times)
   if (missing(max_times)) max_times = getOption('tinytex.compile.max_times', max_times)
+  if (missing(install_packages))
+    install_packages = getOption('tinytex.install_packages', install_packages)
   if (missing(bib_engine)) bib_engine = getOption('tinytex.bib_engine', bib_engine)
   if (missing(engine_args)) engine_args = getOption('tinytex.engine_args', engine_args)
   if (missing(clean)) clean = getOption('tinytex.clean', TRUE)
@@ -184,7 +188,7 @@ latexmk_emu = function(
             pkgs_last <<- pkgs
             return(run_engine())
           }
-        } else if (is_writable(Sys.which('tlmgr'))) {
+        } else if (tlmgr_writable()) {
           # chances are you are the sysadmin, and don't need ~/.TinyTeX
           if (delete_texmf_user()) return(run_engine())
         }
@@ -348,7 +352,7 @@ check_inline_math = function(x, f) {
   r = 'l[.][0-9]+\\s*|\\s*[0-9.]+\\\\times.*'
   if (!any('! Missing $ inserted.' == x) || !length(i <- grep(r, x))) return()
   m = gsub(r, '', x[i]); m = m[m != '']
-  s = xfun::with_ext(f, 'Rmd')
+  s = with_ext(f, 'Rmd')
   if (file.exists(s)) message(
     if (length(m)) c('Try to find the following text in ', s, ':\n', paste(' ', m, '\n'), '\n'),
     'You may need to add $ $ around a certain inline R expression `r ` in ', s,
