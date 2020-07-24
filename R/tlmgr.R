@@ -56,7 +56,7 @@ tweak_path = function() {
   # check tlmgr exists under the default installation dir of TinyTeX, or the
   # global option tinytex.tlmgr.path
   f = getOption('tinytex.tlmgr.path', find_tlmgr())
-  if (!file_test('-x', f)) return()
+  if (length(f) == 0 || !file_test('-x', f)) return()
   bin = normalizePath(dirname(f))
   # if the pdftex from TinyTeX is already on PATH, no need to adjust the PATH
   if ((p <- Sys.which('pdftex')) != '') {
@@ -155,11 +155,14 @@ tlmgr_remove = function(pkgs = character(), usermode = FALSE) {
 #'   command \command{tlmgr update} or \command{tlmgr conf}.
 #' @param run_fmtutil Whether to run \command{fmtutil-sys --all} to (re)create
 #'   format and hyphenation files after updating \pkg{tlmgr}.
+#' @param delete_tlpdb Whether to delete the \file{texlive.tlpdb.HASH} files
+#'   (where \verb{HASH} is an MD5 hash) under the \file{tlpkg} directory of the
+#'   root directory of TeX Live after updating.
 #' @rdname tlmgr
 #' @export
 tlmgr_update = function(
   all = TRUE, self = TRUE, more_args = character(), usermode = FALSE,
-  run_fmtutil = TRUE, ...
+  run_fmtutil = TRUE, delete_tlpdb = getOption('tinytex.delete_tlpdb', FALSE), ...
 ) {
   # if unable to update due to a new release of TeX Live, skip the update
   if (isTRUE(.global$update_noted)) return(invisible(NULL))
@@ -169,6 +172,8 @@ tlmgr_update = function(
   ))
   check_tl_version(res)
   if (run_fmtutil) fmtutil(usermode, stdout = FALSE)
+  if (delete_tlpdb) delete_tlpdb_files()
+  invisible()
 }
 
 # check if a new version of TeX Live has been released and give instructions on
@@ -189,6 +194,12 @@ check_tl_version = function(x) {
     )
   )
   .global$update_noted = TRUE
+}
+
+delete_tlpdb_files = function() {
+  if ((root <- tinytex_root(FALSE)) != '') file.remove(list.files(
+    file.path(root, 'tlpkg'), '^texlive[.]tlpdb[.][0-9a-f]{32}$', full.names = TRUE
+  ))
 }
 
 #' @param action On Unix, add/remove symlinks of binaries to/from the system's
