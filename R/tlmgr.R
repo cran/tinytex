@@ -5,7 +5,11 @@
 #'
 #' The \code{tlmgr()} function is a wrapper of \code{system2('tlmgr')}. All
 #' other \code{tlmgr_*()} functions are based on \code{tlmgr} for specific
-#' tasks. Please consult the \pkg{tlmgr} manual for full details.
+#' tasks. For example, \code{tlmgr_install()} runs the command \command{tlmgr
+#' install} to install LaTeX packages, and \code{tlmgr_update} runs the command
+#' \command{tlmgr update}, etc. Note that \code{tlmgr_repo} runs \command{tlmgr
+#' options repository} to query or set the CTAN repository. Please consult the
+#' \pkg{tlmgr} manual for full details.
 #' @param args A character vector of arguments to be passed to the command
 #'   \command{tlmgr}.
 #' @param usermode (For expert users only) Whether to use TeX Live's
@@ -210,13 +214,19 @@ delete_tlpdb_files = function() {
 tlmgr_path = function(action = c('add', 'remove'))
   tlmgr(c('path', match.arg(action)), .quiet = TRUE)
 
-
 #' @rdname tlmgr
 #' @export
-tlmgr_conf = function(more_args = character()) {
-  tlmgr(c('conf', more_args))
+tlmgr_conf = function(more_args = character(), ...) {
+  tlmgr(c('conf', more_args), ...)
 }
 
+#' @param url The URL of the CTAN mirror. If \code{NULL}, show the current
+#'   repository, otherwise set the repository.
+#' @rdname tlmgr
+#' @export
+tlmgr_repo = function(url = NULL, ...) {
+  tlmgr(c('option', 'repository', shQuote(normalize_repo(url))), ...)
+}
 
 #' Add/remove R's texmf tree to/from TeX Live
 #'
@@ -227,6 +237,7 @@ tlmgr_conf = function(more_args = character()) {
 #' used to add/remove R's texmf tree to/from TeX Live via
 #' \code{\link{tlmgr_conf}('auxtrees')}.
 #' @param action Add/remove R's texmf tree to/from TeX Live.
+#' @param ... Arguments passed to \code{\link{tlmgr}()}.
 #' @references See the \pkg{tlmgr} manual for detailed information about
 #'   \command{tlmgr conf auxtrees}. Check out
 #'   \url{https://tex.stackexchange.com/q/77720/9128} if you don't know what
@@ -241,8 +252,8 @@ tlmgr_conf = function(more_args = character()) {
 #'
 #' # all files under R's texmf tree
 #' list.files(file.path(R.home('share'), 'texmf'), recursive = TRUE, full.names = TRUE)
-r_texmf = function(action = c('add', 'remove')) {
-  tlmgr_conf(c('auxtrees', match.arg(action), shQuote(r_texmf_path())))
+r_texmf = function(action = c('add', 'remove'), ...) {
+  tlmgr_conf(c('auxtrees', match.arg(action), shQuote(r_texmf_path())), ...)
 }
 
 r_texmf_path = function() {
@@ -334,7 +345,6 @@ tl_names = function(x, platform = tl_platform()) {
 # get the names of packages that are not relocatable
 tl_unrelocatable = function() {
   x = tl_list(NULL, 'name,relocatable', FALSE, stdout = TRUE, .quiet = TRUE)
-  x = grep(',0$', x, value = TRUE)
-  x = gsub(',0$', '', x)  # TODO: use xfun::grep_sub() here
+  x = grep_sub(',0$', '', x)
   tl_names(x)
 }

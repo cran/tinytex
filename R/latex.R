@@ -228,35 +228,36 @@ latexmk_emu = function(
   # generate bibliography
   bib_engine = match.arg(bib_engine)
   install_cmd(bib_engine)
+  pkgs_last = character()
   aux = aux_files[if ((biber <- bib_engine == 'biber')) 'bcf' else 'aux']
   if (file.exists(aux)) {
     if (biber || require_bibtex(aux)) {
       blg = aux_files['blg']  # bibliography log file
       build_bib = function() system2_quiet(bib_engine, shQuote(aux), error = {
-        stop("Failed to build the bibliography via ", bib_engine, call. = FALSE)
+        check_blg = function() {
+          if (!file.exists(blg)) return(TRUE)
+          x = readLines(blg)
+          if (length(grep('error message', x)) == 0) return(TRUE)
+          warn = function() {
+            warning(
+              bib_engine, ' seems to have failed:\n\n', paste(x, collapse = '\n'),
+              call. = FALSE
+            )
+            TRUE
+          }
+          if (!tlmgr_available() || !install_packages) return(warn())
+          # install the possibly missing .bst package and rebuild bib
+          r = '.* open style file ([^ ]+).*'
+          pkgs = parse_packages(files = grep_sub(r, '\\1', x), quiet = !verbose)
+          if (length(pkgs) == 0 || identical(pkgs, pkgs_last)) return(warn())
+          pkgs_last <<- pkgs
+          tlmgr_install(pkgs); build_bib()
+          FALSE
+        }
+        if (check_blg())
+          stop("Failed to build the bibliography via ", bib_engine, call. = FALSE)
       })
       build_bib()
-      check_blg = function() {
-        if (!file.exists(blg)) return(TRUE)
-        x = readLines(blg)
-        if (length(grep('error message', x)) == 0) return(TRUE)
-        warn = function() {
-          warning(
-            bib_engine, ' seems to have failed:\n\n', paste(x, collapse = '\n'),
-            call. = FALSE
-          )
-          TRUE
-        }
-        if (!tlmgr_available() || !install_packages) return(warn())
-        # install the possibly missing .bst package and rebuild bib
-        r = '.* open style file ([^ ]+).*'
-        pkgs = parse_packages(files = gsub(r, '\\1', grep(r, x, value = TRUE)))
-        if (length(pkgs) == 0) return(warn())
-        tlmgr_install(pkgs); build_bib()
-        FALSE
-      }
-      # check .blg at most 3 times for missing packages
-      for (i in 1:3) if (check_blg()) break
     }
   }
   for (i in seq_len(max_times)) {
@@ -395,17 +396,17 @@ check_babel = function(file) {
   if (length(m <- latex_warning(file)) == 0 || length(grep('^Package babel Warning:', m)) == 0)
     return()
   r = "^\\(babel).* language `([[:alpha:]]+)'.*$"
-  if (length(i <- grep(r, m)) == 0) return()
-  tlmgr_install(paste0('hyphen-', tolower(gsub(r, '\\1', m[i]))))
+  if (length(m <- grep_sub(r, '\\1', m)) == 0) return()
+  tlmgr_install(paste0('hyphen-', tolower(m)))
 }
 
 # check the version of latexmk
 check_latexmk_version = function() {
   out = system2('latexmk', '-v', stdout = TRUE)
   reg = '^.*Version (\\d+[.]\\d+).*$'
-  out = grep(reg, out, value = TRUE)
+  out = grep_sub(reg, '\\1', out)
   if (length(out) == 0) return()
-  ver = as.numeric_version(gsub(reg, '\\1', out[1]))
+  ver = as.numeric_version(out[1])
   if (ver >= '4.43') return()
   system2('latexmk', '-v')
   warning(
@@ -530,8 +531,7 @@ detect_files = function(text) {
   )
   x = grep(paste(r, collapse = '|'), text, value = TRUE)
   if (length(x) > 0) unique(unlist(lapply(r, function(p) {
-    z = grep(p, x, value = TRUE)
-    v = gsub(p, '\\1', z)
+    v = grep_sub(p, '\\1', x)
     if (length(v) == 0) return(v)
     if (p == r[8] && length(grep('! Package tikz Error:', text)) == 0) return()
     if (!(p %in% r[1:5])) return(if (p %in% r[6:7]) 'epstopdf' else v)
