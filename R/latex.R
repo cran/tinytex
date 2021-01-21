@@ -568,7 +568,7 @@ miss_font = function() {
 
 font_ext = function(x) {
   i = !grepl('[.]', x)
-  x[i] = paste0(x[i], '[.](tfm|afm|mf|otf)')
+  x[i] = paste0(x[i], '(-(Bold|Italic|Regular).*)?[.](tfm|afm|mf|otf|ttf)')
   x
 }
 
@@ -591,6 +591,11 @@ fmtutil = function(usermode = FALSE, ...) {
 fc_cache = function(args = c('-v', '-r')) {
   tweak_path()
   system2('fc-cache', args)
+}
+
+# refresh/update/regenerate everything
+refresh_all = function(...) {
+  fc_cache(); fmtutil(...); updmap(...); texhash()
 }
 
 # look up files in the Kpathsea library, e.g., kpsewhich('Sweave.sty')

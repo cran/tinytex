@@ -2,7 +2,7 @@ Package: tinytex
 Type: Package
 Title: Helper Functions to Install and Maintain TeX Live, and Compile
         LaTeX Documents
-Version: 0.28
+Version: 0.29
 Authors@R: c(
   person("Yihui", "Xie", role = c("aut", "cre", "cph"), email = "xie@yihui.name", comment = c(ORCID = "0000-0003-0645-5666")),
   person(family = "RStudio, PBC", role = "cph"),
@@ -24,11 +24,11 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
 NeedsCompilation: no
-Packaged: 2020-12-14 04:43:47 UTC; yihui
+Packaged: 2021-01-21 02:43:35 UTC; yihui
 Author: Yihui Xie [aut, cre, cph] (<https://orcid.org/0000-0003-0645-5666>),
   RStudio, PBC [cph],
   Fernando Cagua [ctb],
   Ethan Heinzen [ctb]
 Maintainer: Yihui Xie <xie@yihui.name>
 Repository: CRAN
-Date/Publication: 2020-12-14 06:10:02 UTC
+Date/Publication: 2021-01-21 05:50:02 UTC
