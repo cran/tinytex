@@ -106,9 +106,14 @@ tlmgr_search = function(what, file = TRUE, all = FALSE, global = TRUE, word = FA
 tlmgr_install = function(pkgs = character(), usermode = FALSE, path = !usermode && os != 'windows', ...) {
   if (length(pkgs) == 0) return(invisible(0L))
 
+  update_pkgs = function(...) tlmgr_update(..., usermode = usermode)
+
+  # if any packages have been installed, update packages first
+  if (any(check_installed(pkgs))) update_pkgs()
+
   res = tlmgr(c('install', pkgs), usermode, ...)
-  if (res != 0 || !check_installed(pkgs)) {
-    tlmgr_update(all = FALSE, usermode = usermode)
+  if (res != 0 || any(!check_installed(pkgs))) {
+    update_pkgs(all = FALSE)  # update tlmgr itself since it might be outdated
     res = tlmgr(c('install', pkgs), usermode, ...)
   }
   if ('epstopdf' %in% pkgs && is_unix() && Sys.which('gs') == '') {
@@ -142,8 +147,8 @@ tlmgr_writable = function() is_writable(Sys.which('tlmgr'))
 #' \command{tlmgr info PKG} should return \code{PKG} where \code{PKG} is the
 #' package name.
 #' @param pkgs A character vector of LaTeX package names.
-#' @return A logical value indicating if all packages specified in \code{pkgs}
-#'   are installed (if any of them are not installed, it returns \code{FALSE}).
+#' @return A logical vector indicating if packages specified in \code{pkgs} are
+#'   installed.
 #' @note This function only works with LaTeX distributions based on TeX Live,
 #'   such as TinyTeX.
 #' @export
@@ -154,7 +159,7 @@ check_installed = function(pkgs) {
     tl_list(pkgs, stdout = TRUE, stderr = FALSE, .quiet = TRUE),
     error = function(e) NULL, warning = function(e) NULL
   )
-  identical(res, pkgs)
+  pkgs %in% res
 }
 
 #' @rdname tlmgr
@@ -231,7 +236,8 @@ tlmgr_conf = function(more_args = character(), ...) {
 }
 
 #' @param url The URL of the CTAN mirror. If \code{NULL}, show the current
-#'   repository, otherwise set the repository.
+#'   repository, otherwise set the repository. See the \code{repository}
+#'   argument of \code{\link{install_tinytex}()} for examples.
 #' @rdname tlmgr
 #' @export
 tlmgr_repo = function(url = NULL, ...) {
