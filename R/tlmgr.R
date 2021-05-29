@@ -203,13 +203,12 @@ check_tl_version = function(x) {
   if (length(i) == 0) return()
   message(
     'A new version of TeX Live has been released. If you need to install or update ',
-    'any LaTeX packages, you have to upgrade ',
-    if (!is_tinytex()) 'TeX Live.' else c(
+    'any LaTeX packages, you have to upgrade ', if (!is_tinytex()) 'TeX Live.' else c(
       'TinyTeX with tinytex::reinstall_tinytex(). If it fails to upgrade, you ',
       'might be using a default random CTAN mirror that has not been fully synced ',
       'to the main CTAN repository, and you need to wait for a few more days or ',
       'use a CTAN mirror that is known to be up-to-date (see the "repository" ',
-      'argument on the help page ?tinytex::install_tinytex()).'
+      'argument on the help page ?tinytex::install_tinytex).'
     )
   )
   .global$update_noted = TRUE
@@ -304,15 +303,12 @@ tl_sizes = function(show_total = TRUE, pkgs = NULL, only_installed = TRUE, field
   info = info[info$package %in% tl_names(info$package), , drop = FALSE]
   if ('size' %in% names(info)) {
     info = info[order(info[, 'size'], decreasing = TRUE), , drop = FALSE]
-    info$size_h = sapply(info[, 'size'], auto_size)
-    if (show_total) message('The total size is ', auto_size(sum(info$size)))
+    info$size_h = xfun::format_bytes(info[, 'size'])
+    if (show_total) message('The total size is ', xfun::format_bytes(sum(info$size)))
   }
   rownames(info) = NULL
   info
 }
-
-# human-readable size from bytes
-auto_size = function(bytes) format(structure(bytes, class = 'object_size'), 'auto')
 
 #' List the names of installed TeX Live packages
 #'
@@ -336,18 +332,23 @@ tl_platform = function() tlmgr('print-platform', stdout = TRUE, .quiet = TRUE)
 
 # get all supported platforms (this needs Internet connection since the info is
 # fetched from CTAN)
-tl_platforms = function() {
+tl_platforms = function(print = FALSE) {
   x = tlmgr(c('platform', 'list'), stdout = TRUE, .quiet = TRUE)
   x = sub('^\\(i)', '   ', x)
-  trimws(grep('^    ', x, value = TRUE))
+  x = sort(trimws(grep('^    ', x, value = TRUE)))
+  if (print) {
+    cat(sprintf("'%s'", x), sep = ', ')
+    invisible(x)
+  } else x
 }
 
 # a copy of the returned result from tl_platform() is saved here because
 # tl_platform() is a little slow and requires Internet connection
 .tl_platforms = c(
   'aarch64-linux', 'amd64-freebsd', 'amd64-netbsd', 'armhf-linux', 'i386-cygwin',
-  'i386-freebsd', 'i386-linux', 'i386-netbsd', 'i386-solaris', 'win32', 'x86_64-cygwin',
-  'x86_64-darwin', 'x86_64-darwinlegacy', 'x86_64-linux', 'x86_64-linuxmusl', 'x86_64-solaris'
+  'i386-freebsd', 'i386-linux', 'i386-netbsd', 'i386-solaris', 'universal-darwin',
+  'win32', 'x86_64-cygwin', 'x86_64-darwinlegacy', 'x86_64-linux',
+  'x86_64-linuxmusl', 'x86_64-solaris'
 )
 
 # remove the platform suffixes from texlive package names, and optionally keep

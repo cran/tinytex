@@ -224,7 +224,9 @@ latexmk_emu = function(
     invisible(res)
   }
   run_engine()
-  if (install_packages) check_babel(logfile)
+  # some problems only trigger warnings but not errors, e.g.,
+  # https://github.com/yihui/tinytex/issues/311 fix them and re-run engine
+  if (install_packages && check_extra(logfile)) run_engine()
 
   # generate index
   if (file.exists(idx <- aux_files['idx'])) {
@@ -402,13 +404,35 @@ latex_warning = function(file, show = getOption('tinytex.latexmk.warning', TRUE)
   x[i]
 }
 
-# check if any babel packages are missing
-check_babel = function(file) {
-  if (length(m <- latex_warning(file, FALSE)) == 0 || length(grep('^Package babel Warning:', m)) == 0)
-    return()
-  r = "^\\(babel).* language `([[:alpha:]]+)'.*$"
-  if (length(m <- grep_sub(r, '\\1', m)) == 0) return()
-  tlmgr_install(paste0('hyphen-', tolower(m)))
+# check if any babel/glossaries/... packages are missing
+check_extra = function(file) {
+  length(m <- latex_warning(file, FALSE)) > 0 &&
+    length(grep('^Package ([^ ]+) Warning:', m)) > 0 &&
+    any(check_babel(m), check_glossaries(m), check_datetime2(m))
+}
+
+check_babel = function(text) {
+  r = "^\\(babel).* language `([^']+)'.*$"
+  if (length(m <- grep_sub(r, '\\1', text)) == 0) return(FALSE)
+  tlmgr_install(paste0('hyphen-', tolower(m))) == 0
+}
+
+# Package glossaries Warning: No language module detected for `english'.
+# (glossaries)                Language modules need to be installed separately.
+# (glossaries)                Please check on CTAN for a bundle called
+# (glossaries)                `glossaries-english' or similar.
+check_glossaries = function(text) {
+  r = "^\\(glossaries).* `([^']+)'.*$"
+  if (length(m <- grep_sub(r, '\\1', text)) == 0) return(FALSE)
+  tlmgr_install(m) == 0
+}
+
+# Package datetime2 Warning: Date-Time Language Module `english' not installed on
+# input line xxx.
+check_datetime2 = function(text) {
+  r = "^Package datetime2 Warning: Date-Time Language Module `([^']+)' not installed.*$"
+  if (length(m <- grep_sub(r, '\\1', text)) == 0) return(FALSE)
+  tlmgr_install(paste0('datetime2-', m)) == 0
 }
 
 # check the version of latexmk
@@ -518,36 +542,58 @@ detect_files = function(text) {
   # ! Package tikz Error: I did not find the tikz library 'hobby'... named tikzlibraryhobby.code.tex
   # support file `supp-pdf.mkii' (supp-pdf.tex) is missing
   # ! I can't find file `hyph-de-1901.ec.tex'.
-  r = c(
-    ".*! Font [^=]+=([^ ]+).+ not loadable.*",
-    '.*! .*The font "([^"]+)" cannot be found.*',
-    '.*!.+ error:.+\\(file ([^)]+)\\): .*',
-    '.*Package widetext error: Install the ([^ ]+) package.*',
-    '.*Unable to find TFM file "([^"]+)".*',
-    # the above are messages about missing fonts; below are typically missing .sty or commands
-
-    ".* File `(.+eps-converted-to.pdf)'.*",
-    ".*xdvipdfmx:fatal: pdf_ref_obj.*",
-
-    '.* (tikzlibrary[^ ]+?[.]code[.]tex).*',
-
-    ".* Loading '([^']+)' aborted!",
-    ".*! LaTeX Error: File `([^']+)' not found.*",
-    ".* file ['`]?([^' ]+)'? not found.*",
-    '.*the language definition file ([^ ]+) .*',
-    '.* \\(file ([^)]+)\\): cannot open .*',
-    ".*file `([^']+)' .*is missing.*",
-    ".*! CTeX fontset `([^']+)' is unavailable.*",
-    ".*: ([^:]+): command not found.*",
-    ".*! I can't find file `([^']+)'.*"
+  # ! Package pdfx Error: No color profile sRGB_IEC61966-2-1_black_scaled.icc found
+  # No file LGRcmr.fd. ! LaTeX Error: This NFSS system isn't set up properly.
+  r = list(
+    font = c(
+      # error messages about missing fonts (don't move the first item below, as
+      # it is special and emitted by widetext; the rest can be freely reordered)
+      '.*Package widetext error: Install the ([^ ]+) package.*',
+      ".*! Font [^=]+=([^ ]+).+ not loadable.*",
+      '.*! .*The font "([^"]+)" cannot be found.*',
+      '.*!.+ error:.+\\(file ([^)]+)\\): .*',
+      '.*Unable to find TFM file "([^"]+)".*'
+    ),
+    fd = c(
+      # font definition files
+      ".*No file ([^`'. ]+[.]fd)[.].*"
+    ),
+    epstopdf = c(
+      # possible errors when epstopdf is missing
+      ".* File `(.+eps-converted-to.pdf)'.*",
+      ".*xdvipdfmx:fatal: pdf_ref_obj.*"
+    ),
+    colorprofiles.sty = c(
+      '.* Package pdfx Error: No color profile ([^ ]+).*'
+    ),
+    tikz = c(
+      # when a required tikz library is missing
+      '.* (tikzlibrary[^ ]+?[.]code[.]tex).*'
+    ),
+    style = c(
+      # missing .sty or commands
+      ".* Loading '([^']+)' aborted!",
+      ".*! LaTeX Error: File `([^']+)' not found.*",
+      ".* file ['`]?([^' ]+)'? not found.*",
+      '.*the language definition file ([^ ]+) .*',
+      '.* \\(file ([^)]+)\\): cannot open .*',
+      ".*file `([^']+)' .*is missing.*",
+      ".*! CTeX fontset `([^']+)' is unavailable.*",
+      ".*: ([^:]+): command not found.*",
+      ".*! I can't find file `([^']+)'.*"
+    )
   )
-  x = grep(paste(r, collapse = '|'), text, value = TRUE)
-  if (length(x) > 0) unique(unlist(lapply(r, function(p) {
+  x = grep(paste(unlist(r), collapse = '|'), text, value = TRUE)
+  if (length(x) > 0) unique(unlist(lapply(unlist(r), function(p) {
     v = grep_sub(p, '\\1', x)
     if (length(v) == 0) return(v)
-    if (p == r[8] && length(grep('! Package tikz Error:', text)) == 0) return()
-    if (!(p %in% r[1:5])) return(if (p %in% r[6:7]) 'epstopdf' else v)
-    if (p == r[4]) paste0(v, '.sty') else font_ext(v)
+    if (p == r$tikz && length(grep('! Package tikz Error:', text)) == 0) return()
+    for (i in c('epstopdf', 'colorprofiles.sty')) {
+      if (p %in% r[[i]]) return(i)
+    }
+    if (p == r$fd) v = tolower(v)  # LGRcmr.fd -> lgrcmr.fd
+    if (!(p %in% r$font)) return(v)
+    if (p == r$font[1]) paste0(v, '.sty') else font_ext(v)
   })))
 }
 
