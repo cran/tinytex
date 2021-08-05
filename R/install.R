@@ -339,8 +339,8 @@ install_prebuilt = function(
   if (xfun::file_ext(pkg) == '') {
     if (version == 'latest') {
       version = xfun::github_releases('yihui/tinytex-releases', version)
-      version = gsub('^v', '', version)
     }
+    version = gsub('^v', '', version)
     installer = if (pkg == '') 'TinyTeX' else pkg
     # e.g., TinyTeX-0.zip, TinyTeX-1-v2020.10.tar.gz, ...
     pkg = paste0(
@@ -378,6 +378,8 @@ post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
     dir.create('~/bin', FALSE, TRUE)
     tlmgr(c('option', 'sys_bin', '~/bin'))
   }
+  # fix fonts.conf: https://github.com/yihui/tinytex/issues/313
+  tlmgr(c('postaction', 'install', 'script', 'xetex'), .quiet = TRUE)
   if (add_path) tlmgr_path()
   r_texmf(.quiet = TRUE)
   # don't use the default random ctan mirror when installing on CI servers
