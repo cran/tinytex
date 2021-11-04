@@ -74,15 +74,32 @@ install_tinytex = function(
     stop('Sorry, but tinytex::install_tinytex() does not support this platform: ', os)
   )
 
+  src_install = getOption('tinytex.source.install', need_source_install())
   install = function(...) {
-    if (getOption('tinytex.source.install', need_source_install())) {
+    if (src_install) {
       install_tinytex_source(repository, ...)
     } else {
       install_prebuilt('TinyTeX-1', ..., repo = repository)
     }
   }
   force(extra_packages)  # evaluate it before installing another version of TinyTeX
-  if (version == 'daily') version = ''
+  if (version == 'daily') {
+    version = ''
+    # test if https://yihui.org or github.com is accessible because the daily
+    # version is downloaded from there
+    determine_version = function() {
+      if (url_accessible('https://yihui.org')) return('')
+      if (url_accessible('https://github.com')) return('daily-github')
+      warning(
+        "The daily version of TinyTeX does not appear to be accessible. ",
+        "Switching to version = 'latest' instead. If you are sure to install ",
+        "the daily version, call tinytex::install_tinytex(version = 'daily') ",
+        "(which may fail)."
+      )
+      'latest'
+    }
+    if (missing(version) && !src_install) version = determine_version()
+  }
   user_dir = install(user_dir, version, add_path, extra_packages)
 
   opts = options(tinytex.tlmgr.path = find_tlmgr(user_dir))
@@ -339,6 +356,10 @@ install_prebuilt = function(
   if (xfun::file_ext(pkg) == '') {
     if (version == 'latest') {
       version = xfun::github_releases('yihui/tinytex-releases', version)
+    } else if (version == 'daily-github') {
+      version = ''
+      opts = options(tinytex.install.url = 'https://github.com/yihui/tinytex-releases/releases/download/daily/')
+      on.exit(options(opts), add = TRUE)
     }
     version = gsub('^v', '', version)
     installer = if (pkg == '') 'TinyTeX' else pkg
@@ -381,6 +402,9 @@ post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
   }
   # fix fonts.conf: https://github.com/yihui/tinytex/issues/313
   tlmgr(c('postaction', 'install', 'script', 'xetex'), .quiet = TRUE)
+  # do not wrap lines in latex log (#322)
+  tlmgr_conf(c('texmf', 'max_print_line', '10000'), .quiet = TRUE)
+
   if (add_path) tlmgr_path()
   r_texmf(.quiet = TRUE)
   # don't use the default random ctan mirror when installing on CI servers
@@ -395,8 +419,17 @@ post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
 download_installer = function(file, version) {
   url = if (version != '') sprintf(
     'https://github.com/yihui/tinytex-releases/releases/download/v%s/%s', version, file
-  ) else paste0('https://yihui.org/tinytex/', file)
+  ) else paste0(getOption('tinytex.install.url', 'https://yihui.org/tinytex/'), file)
   download_file(url, file)
+}
+
+# TODO: use xfun::url_accessible()
+url_accessible = function(url) {
+  tf = tempfile(); on.exit(unlink(tf), add = TRUE)
+  tryCatch(suppressWarnings({
+    xfun::download_file(url, tf, quiet = TRUE)
+    TRUE
+  }), error = function(e) FALSE)
 }
 
 #' Copy TinyTeX to another location and use it in another system
