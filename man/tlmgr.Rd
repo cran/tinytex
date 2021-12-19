@@ -5,6 +5,7 @@
 \alias{tlmgr_search}
 \alias{tlmgr_install}
 \alias{tlmgr_remove}
+\alias{tlmgr_version}
 \alias{tlmgr_update}
 \alias{tlmgr_path}
 \alias{tlmgr_conf}
@@ -23,6 +24,8 @@ tlmgr_install(
 )
 
 tlmgr_remove(pkgs = character(), usermode = FALSE)
+
+tlmgr_version(raw = TRUE)
 
 tlmgr_update(
   all = TRUE,
@@ -80,6 +83,10 @@ this after a binary package is installed, such as the \pkg{metafont}
 package, which contains the executable \command{mf}, but it does not hurt
 even if no binary packages were installed).}
 
+\item{raw}{Whether to return the raw output of the command \command{tlmgr
+--version}, or a short version of the format \samp{TeX Live YEAR (TinyTeX)
+with tlmgr DATE}.}
+
 \item{self}{Whether to update the TeX Live Manager itself.}
 
 \item{more_args}{A character vector of more arguments to be passed to the
@@ -114,17 +121,19 @@ options repository} to query or set the CTAN repository. Please consult the
 \pkg{tlmgr} manual for full details.
 }
 \examples{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # search for a package that contains titling.sty
 tlmgr_search('titling.sty')
 
-#' to match titling.sty exactly, add a slash before the keyword, e.g.
-#' tlmgr_search('/titling.sty')
+# to match titling.sty exactly, add a slash before the keyword, e.g.
+tlmgr_search('/titling.sty')
 
-#' use a regular expression if you want to be more precise, e.g.
-#' tlmgr_search('/titling\\.sty$')
+# use a regular expression if you want to be more precise, e.g.
+tlmgr_search('/titling\\\\.sty$')
 
 # list all installed LaTeX packages
 tlmgr(c('info', '--list', '--only-installed', '--data', 'name'))
+\dontshow{\}) # examplesIf}
 }
 \references{
 The \pkg{tlmgr} manual:

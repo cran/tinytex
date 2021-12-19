@@ -10,8 +10,7 @@
 #'   unless \code{force = TRUE}).
 #' @param version The version of TinyTeX, e.g., \code{"2020.09"} (see all
 #'   available versions at \url{https://github.com/yihui/tinytex-releases}, or
-#'   the last few releases via
-#'   \code{xfun::github_releases('yihui/tinytex-releases')}). By default, it
+#'   via \code{xfun::github_releases('yihui/tinytex-releases')}). By default, it
 #'   installs the latest daily build of TinyTeX. If \code{version = 'latest'},
 #'   it installs the latest Github release of TinyTeX.
 #' @param repository The CTAN repository to set. You can find available
@@ -88,8 +87,8 @@ install_tinytex = function(
     # test if https://yihui.org or github.com is accessible because the daily
     # version is downloaded from there
     determine_version = function() {
-      if (url_accessible('https://yihui.org')) return('')
-      if (url_accessible('https://github.com')) return('daily-github')
+      if (xfun::url_accessible('https://yihui.org')) return('')
+      if (xfun::url_accessible('https://github.com')) return('daily-github')
       warning(
         "The daily version of TinyTeX does not appear to be accessible. ",
         "Switching to version = 'latest' instead. If you are sure to install ",
@@ -131,7 +130,11 @@ normalize_repo = function(url) {
   # don't normalize the url if users passes I(url) or 'ctan' or NULL
   if (is.null(url) || url == 'ctan' || inherits(url, 'AsIs')) return(url)
   url = sub('/+$', '', url)
-  if (!grepl('/tlnet$', url)) url = paste0(url, '/systems/texlive/tlnet')
+  if (!grepl('/tlnet$', url)) {
+    url2 = paste0(url, '/systems/texlive/tlnet')
+    # return the amended url if it works
+    if (xfun::url_accessible(url2)) return(url2)
+  }
   url
 }
 
@@ -403,7 +406,7 @@ post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
   # fix fonts.conf: https://github.com/yihui/tinytex/issues/313
   tlmgr(c('postaction', 'install', 'script', 'xetex'), .quiet = TRUE)
   # do not wrap lines in latex log (#322)
-  tlmgr_conf(c('texmf', 'max_print_line', '10000'), .quiet = TRUE)
+  tlmgr_conf(c('texmf', 'max_print_line', '10000'), .quiet = TRUE, stdout = FALSE)
 
   if (add_path) tlmgr_path()
   r_texmf(.quiet = TRUE)
@@ -421,15 +424,6 @@ download_installer = function(file, version) {
     'https://github.com/yihui/tinytex-releases/releases/download/v%s/%s', version, file
   ) else paste0(getOption('tinytex.install.url', 'https://yihui.org/tinytex/'), file)
   download_file(url, file)
-}
-
-# TODO: use xfun::url_accessible()
-url_accessible = function(url) {
-  tf = tempfile(); on.exit(unlink(tf), add = TRUE)
-  tryCatch(suppressWarnings({
-    xfun::download_file(url, tf, quiet = TRUE)
-    TRUE
-  }), error = function(e) FALSE)
 }
 
 #' Copy TinyTeX to another location and use it in another system
