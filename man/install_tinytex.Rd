@@ -11,7 +11,7 @@ install_tinytex(
   force = FALSE,
   dir = "auto",
   version = "daily",
-  repository = "ctan",
+  repository = "auto",
   extra_packages = if (is_tinytex()) tl_pkgs(),
   add_path = TRUE
 )
@@ -23,18 +23,23 @@ reinstall_tinytex(packages = TRUE, dir = tinytex_root(), ...)
 tinytex_root(error = TRUE)
 }
 \arguments{
-\item{force}{Whether to force to install (override) or uninstall TinyTeX.}
+\item{force}{Whether to force to install or uninstall TinyTeX. For
+\code{install_tinytex()}, \code{force = FALSE} will stop this function from
+installing TinyTeX if another LaTeX distribution is detected, or the
+directory specified via the \code{dir} argument exists.}
 
-\item{dir}{The directory to install or uninstall TinyTeX (should not exist
-unless \code{force = TRUE}).}
+\item{dir}{The directory to install (should not exist unless \code{force =
+TRUE}) or uninstall TinyTeX.}
 
 \item{version}{The version of TinyTeX, e.g., \code{"2020.09"} (see all
-available versions at \url{https://github.com/yihui/tinytex-releases}, or
-via \code{xfun::github_releases('yihui/tinytex-releases')}). By default, it
+available versions at \url{https://github.com/rstudio/tinytex-releases}, or
+via \code{xfun::github_releases('rstudio/tinytex-releases')}). By default, it
 installs the latest daily build of TinyTeX. If \code{version = 'latest'},
 it installs the latest Github release of TinyTeX.}
 
-\item{repository}{The CTAN repository to set. You can find available
+\item{repository}{The CTAN repository to set. By default, it is the
+repository automatically chosen by \code{https://mirror.ctan.org} (which is
+usually the fastest one to your location). You can find available
 repositories at \code{https://ctan.org/mirrors}), e.g.,
 \code{'http://mirrors.tuna.tsinghua.edu.cn/CTAN/'}, or
 \code{'https://mirror.las.iastate.edu/tex-archive/'}. In theory, this
@@ -63,6 +68,12 @@ custom LaTeX distribution based on TeX Live. The function
 \code{uninstall_tinytex()} removes TinyTeX; \code{reinstall_tinytex()}
 reinstalls TinyTeX as well as previously installed LaTeX packages by default;
 \code{tinytex_root()} returns the root directory of TinyTeX if found.
+}
+\note{
+If you really want to disable the installation, you may set the
+  environment variable \var{TINYTEX_PREVENT_INSTALL} to \code{true}. Then
+  \code{install_tinytex()} will fail immediately. This can be useful to
+  sysadmins who want to prevent the accidental installation of TinyTeX.
 }
 \references{
 See the TinyTeX documentation (\url{https://yihui.org/tinytex/})

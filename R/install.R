@@ -5,15 +5,20 @@
 #' \code{uninstall_tinytex()} removes TinyTeX; \code{reinstall_tinytex()}
 #' reinstalls TinyTeX as well as previously installed LaTeX packages by default;
 #' \code{tinytex_root()} returns the root directory of TinyTeX if found.
-#' @param force Whether to force to install (override) or uninstall TinyTeX.
-#' @param dir The directory to install or uninstall TinyTeX (should not exist
-#'   unless \code{force = TRUE}).
+#' @param force Whether to force to install or uninstall TinyTeX. For
+#'   \code{install_tinytex()}, \code{force = FALSE} will stop this function from
+#'   installing TinyTeX if another LaTeX distribution is detected, or the
+#'   directory specified via the \code{dir} argument exists.
+#' @param dir The directory to install (should not exist unless \code{force =
+#'   TRUE}) or uninstall TinyTeX.
 #' @param version The version of TinyTeX, e.g., \code{"2020.09"} (see all
-#'   available versions at \url{https://github.com/yihui/tinytex-releases}, or
-#'   via \code{xfun::github_releases('yihui/tinytex-releases')}). By default, it
+#'   available versions at \url{https://github.com/rstudio/tinytex-releases}, or
+#'   via \code{xfun::github_releases('rstudio/tinytex-releases')}). By default, it
 #'   installs the latest daily build of TinyTeX. If \code{version = 'latest'},
 #'   it installs the latest Github release of TinyTeX.
-#' @param repository The CTAN repository to set. You can find available
+#' @param repository The CTAN repository to set. By default, it is the
+#'   repository automatically chosen by \code{https://mirror.ctan.org} (which is
+#'   usually the fastest one to your location). You can find available
 #'   repositories at \code{https://ctan.org/mirrors}), e.g.,
 #'   \code{'http://mirrors.tuna.tsinghua.edu.cn/CTAN/'}, or
 #'   \code{'https://mirror.las.iastate.edu/tex-archive/'}. In theory, this
@@ -27,16 +32,37 @@
 #'   the bin path of TeX Live to the system environment variable \var{PATH}.
 #' @references See the TinyTeX documentation (\url{https://yihui.org/tinytex/})
 #'   for the default installation directories on different platforms.
+#' @note If you really want to disable the installation, you may set the
+#'   environment variable \var{TINYTEX_PREVENT_INSTALL} to \code{true}. Then
+#'   \code{install_tinytex()} will fail immediately. This can be useful to
+#'   sysadmins who want to prevent the accidental installation of TinyTeX.
 #' @export
 install_tinytex = function(
-  force = FALSE, dir = 'auto', version = 'daily', repository = 'ctan',
+  force = FALSE, dir = 'auto', version = 'daily', repository = 'auto',
   extra_packages = if (is_tinytex()) tl_pkgs(), add_path = TRUE
 ) {
+  if (tolower(Sys.getenv('TINYTEX_PREVENT_INSTALL')) == 'true') stop(
+    "The environment variable 'TINYTEX_PREVENT_INSTALL' was set to 'true', so ",
+    "the installation is aborted."
+  )
   if (!is.logical(force)) stop('The argument "force" must take a logical value.')
+  # if tlmgr is detected in the system, ask in interactive mode whether to
+  # continue the installation, and stop in non-interactive() mode
+  p = which_bin(c('tlmgr', 'pdftex', 'xetex', 'luatex'))
+  p = p[p != '']
+  if (!force && length(p)) {
+    message("Found '", p[1], "', which indicates a LaTeX distribution may have existed in the system.")
+    if (interactive()) {
+      if (tolower(substr(readline('Continue the installation anyway? (Y/N) '), 1, 1)) != 'y')
+        return(invisible(''))
+    } else stop(
+      'If you want to force installing TinyTeX anyway, use tinytex::install_tinytex(force = TRUE).'
+    )
+  }
   check_dir = function(dir) {
     if (dir_exists(dir) && !force) stop(
       'The directory "', dir, '" exists. Please either delete it, ',
-      'or use install_tinytex(force = TRUE).'
+      'or use tinytex::install_tinytex(force = TRUE).'
     )
   }
   if (missing(dir)) dir = ''
@@ -48,25 +74,25 @@ install_tinytex = function(
     user_dir = normalizePath(dir, mustWork = FALSE)
   }
 
-  https = grepl('^https://', repository)
   repository = normalize_repo(repository)
   not_ctan = repository != 'ctan'
+  https = grepl('^https://', repository)
 
   owd = setwd(tempdir()); on.exit(setwd(owd), add = TRUE)
 
   if ((texinput <- Sys.getenv('TEXINPUT')) != '') message(
     'Your environment variable TEXINPUT is "', texinput,
     '". Normally you should not set this variable, because it may lead to issues like ',
-    'https://github.com/yihui/tinytex/issues/92.'
+    'https://github.com/rstudio/tinytex/issues/92.'
   )
 
   switch(
     os,
     'unix' = {
       check_local_bin()
-      if (os_index != 3 && !dir_exists('~/bin')) on.exit(message(
+      if (os_index != 3 && !any(dir_exists(c('~/bin', '~/.local/bin')))) on.exit(message(
         'You may have to restart your system after installing TinyTeX to make sure ',
-        '~/bin appears in your PATH variable (https://github.com/yihui/tinytex/issues/16).'
+        '~/bin appears in your PATH variable (https://github.com/rstudio/tinytex/issues/16).'
       ), add = TRUE)
     },
     'windows' = {},
@@ -129,6 +155,8 @@ need_source_install = function() {
 normalize_repo = function(url) {
   # don't normalize the url if users passes I(url) or 'ctan' or NULL
   if (is.null(url) || url == 'ctan' || inherits(url, 'AsIs')) return(url)
+  if (url == 'auto') return(auto_repo())
+  if (url == 'illinois') return('https://ctan.math.illinois.edu/systems/texlive/tlnet')
   url = sub('/+$', '', url)
   if (!grepl('/tlnet$', url)) {
     url2 = paste0(url, '/systems/texlive/tlnet')
@@ -136,6 +164,14 @@ normalize_repo = function(url) {
     if (xfun::url_accessible(url2)) return(url2)
   }
   url
+}
+
+# get the automatic CTAN mirror returned from mirror.ctan.org
+auto_repo = function() {
+  x = curlGetHeaders('https://mirror.ctan.org/systems/texlive/tlnet')
+  x = xfun::grep_sub('^location: ([^[:space:]]+)\\s*$', '\\1', x)
+  x = tail(x, 1)
+  if (length(x) == 1) x else 'ctan'
 }
 
 win_app_dir = function(..., error = TRUE) {
@@ -153,7 +189,7 @@ check_local_bin = function() {
   chown_cmd = 'chown -R `whoami`:admin /usr/local/bin'
   message(
     'The directory /usr/local/bin is not writable. I recommend that you ',
-    'make it writable. See https://github.com/yihui/tinytex/issues/24 for more info.'
+    'make it writable. See https://github.com/rstudio/tinytex/issues/24 for more info.'
   )
   if (system(sprintf(
     "/usr/bin/osascript -e 'do shell script \"%s\" with administrator privileges'", chown_cmd
@@ -245,7 +281,7 @@ reinstall_tinytex = function(packages = TRUE, dir = tinytex_root(), ...) {
     paste('"', pkgs, '"', sep = '', collapse = ', '), '))\n'
   )
   # in theory, users should not touch the texmf-local dir; if they did, I'll try
-  # to preserve it during reinstall: https://github.com/yihui/tinytex/issues/117
+  # to preserve it during reinstall: https://github.com/rstudio/tinytex/issues/117
   if (length(list.files(texmf <- file.path(dir, 'texmf-local'), recursive = TRUE)) > 0) {
     dir.create(texmf_tmp <- tempfile(), recursive = TRUE)
     message(
@@ -266,8 +302,7 @@ reinstall_tinytex = function(packages = TRUE, dir = tinytex_root(), ...) {
 #' @rdname install_tinytex
 #' @export
 tinytex_root = function(error = TRUE) {
-  tweak_path()
-  path = Sys.which('tlmgr')
+  path = which_bin('tlmgr')
   if (path == '') return('')
   root_dir = function(path, ...) {
     dir = normalizePath(file.path(dirname(path), ...), mustWork = TRUE)
@@ -283,6 +318,12 @@ tinytex_root = function(error = TRUE) {
   ) else return('')
   path = symlink_root(path)
   root_dir(normalizePath(path), '..', '..', '..')
+}
+
+# return paths to TinyTeX's executables even if TinyTeX was not added to PATH
+which_bin = function(exec) {
+  tweak_path()
+  Sys.which(exec)
 }
 
 # trace a symlink to its final destination
@@ -313,10 +354,10 @@ open_tlmgr = function() {
 #' @examples tinytex::is_tinytex()
 is_tinytex = function() tryCatch({
   root = tinytex_root()
-  root != '' && (gsub('^[.]', '', tolower(basename(root))) == 'tinytex' || any(grepl(
-    '\\W[.]?TinyTeX\\W',
-    readLines(file.path(root, 'texmf-dist/web2c/fmtutil.cnf'), n = 1)
-  )))
+  root != '' && (
+    grepl('^[.]?tinytex$', tolower(basename(root))) ||
+      file.exists(file.path(root, '.tinytex'))
+  )
 }, error = function(e) FALSE)
 
 dir_rename = function(from, to) {
@@ -358,10 +399,10 @@ install_prebuilt = function(
 
   if (xfun::file_ext(pkg) == '') {
     if (version == 'latest') {
-      version = xfun::github_releases('yihui/tinytex-releases', version)
+      version = xfun::github_releases('rstudio/tinytex-releases', version)
     } else if (version == 'daily-github') {
       version = ''
-      opts = options(tinytex.install.url = 'https://github.com/yihui/tinytex-releases/releases/download/daily/')
+      opts = options(tinytex.install.url = 'https://github.com/rstudio/tinytex-releases/releases/download/daily/')
       on.exit(options(opts), add = TRUE)
     }
     version = gsub('^v', '', version)
@@ -400,10 +441,10 @@ install_prebuilt = function(
 # post-install configurations
 post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
   if (os_index == 2) {
-    dir.create('~/bin', FALSE, TRUE)
-    tlmgr(c('option', 'sys_bin', '~/bin'))
+    if (!dir_exists(bin_dir <- '~/.local/bin')) dir.create(bin_dir <- '~/bin', FALSE, TRUE)
+    tlmgr(c('option', 'sys_bin', bin_dir))
   }
-  # fix fonts.conf: https://github.com/yihui/tinytex/issues/313
+  # fix fonts.conf: https://github.com/rstudio/tinytex/issues/313
   tlmgr(c('postaction', 'install', 'script', 'xetex'), .quiet = TRUE)
   # do not wrap lines in latex log (#322)
   tlmgr_conf(c('texmf', 'max_print_line', '10000'), .quiet = TRUE, stdout = FALSE)
@@ -421,7 +462,7 @@ post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
 
 download_installer = function(file, version) {
   url = if (version != '') sprintf(
-    'https://github.com/yihui/tinytex-releases/releases/download/v%s/%s', version, file
+    'https://github.com/rstudio/tinytex-releases/releases/download/v%s/%s', version, file
   ) else paste0(getOption('tinytex.install.url', 'https://yihui.org/tinytex/'), file)
   download_file(url, file)
 }

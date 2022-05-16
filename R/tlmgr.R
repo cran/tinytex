@@ -46,7 +46,7 @@ tlmgr = function(args = character(), usermode = FALSE, ..., .quiet = FALSE) {
   )
   if (usermode) args = c('--usermode', args)
   if (!.quiet) message(paste(c('tlmgr', args), collapse = ' '))
-  # use TeX Live's own binaries (e.g., curl): https://github.com/yihui/tinytex/issues/354
+  # use TeX Live's own binaries (e.g., curl): https://github.com/rstudio/tinytex/issues/354
   vars = xfun::set_envvar(c(TEXLIVE_PREFER_OWN = 1))
   on.exit(xfun::set_envvar(vars), add = TRUE)
   system2('tlmgr', args, ...)
@@ -223,11 +223,7 @@ check_tl_version = function(x) {
   message(
     'A new version of TeX Live has been released. If you need to install or update ',
     'any LaTeX packages, you have to upgrade ', if (!is_tinytex()) 'TeX Live.' else c(
-      'TinyTeX with tinytex::reinstall_tinytex(). If it fails to upgrade, you ',
-      'might be using a default random CTAN mirror that has not been fully synced ',
-      'to the main CTAN repository, and you need to wait for a few more days or ',
-      'use a CTAN mirror that is known to be up-to-date (see the "repository" ',
-      'argument on the help page ?tinytex::install_tinytex).'
+      'TinyTeX with tinytex::reinstall_tinytex(repository = "illinois").'
     )
   )
   .global$update_noted = TRUE
@@ -293,7 +289,7 @@ r_texmf = function(action = c('add', 'remove'), ...) {
 r_texmf_path = function() {
   d = file.path(R.home('share'), 'texmf')
   if (dir_exists(d)) return(d)
-  # retry another directory: https://github.com/yihui/tinytex/issues/60
+  # retry another directory: https://github.com/rstudio/tinytex/issues/60
   if ('Rd.sty' %in% basename(list.files(d2 <- '/usr/share/texmf', recursive = TRUE))) {
     return(d2)
   }
