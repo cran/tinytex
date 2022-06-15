@@ -2,7 +2,7 @@ Package: tinytex
 Type: Package
 Title: Helper Functions to Install and Maintain TeX Live, and Compile
         LaTeX Documents
-Version: 0.39
+Version: 0.40
 Authors@R: c(
   person("Yihui", "Xie", role = c("aut", "cre", "cph"), email = "xie@yihui.name", comment = c(ORCID = "0000-0003-0645-5666")),
   person(family = "RStudio, PBC", role = "cph"),
@@ -23,9 +23,9 @@ License: MIT + file LICENSE
 URL: https://github.com/rstudio/tinytex
 BugReports: https://github.com/rstudio/tinytex/issues
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.0
 NeedsCompilation: no
-Packaged: 2022-05-16 22:04:04 UTC; yihui
+Packaged: 2022-06-15 22:18:40 UTC; yihui
 Author: Yihui Xie [aut, cre, cph] (<https://orcid.org/0000-0003-0645-5666>),
   RStudio, PBC [cph],
   Christophe Dervieux [ctb] (<https://orcid.org/0000-0003-4474-2498>),
@@ -34,4 +34,4 @@ Author: Yihui Xie [aut, cre, cph] (<https://orcid.org/0000-0003-0645-5666>),
   Fernando Cagua [ctb]
 Maintainer: Yihui Xie <xie@yihui.name>
 Repository: CRAN
-Date/Publication: 2022-05-16 23:30:02 UTC
+Date/Publication: 2022-06-15 23:10:02 UTC
