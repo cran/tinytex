@@ -183,7 +183,11 @@ normalize_repo = function(url) {
 
 # get the automatic CTAN mirror returned from mirror.ctan.org
 auto_repo = function() {
-  x = curlGetHeaders('https://mirror.ctan.org/systems/texlive/tlnet')
+  # curlGetHeaders() may time out, hence tryCatch() here
+  x = tryCatch(
+    curlGetHeaders('https://mirror.ctan.org/systems/texlive/tlnet'),
+    error = function(e) character()
+  )
   x = xfun::grep_sub('^location: ([^[:space:]]+)\\s*$', '\\1', x)
   x = tail(x, 1)
   if (length(x) == 1) x else 'ctan'
@@ -200,17 +204,21 @@ win_app_dir = function(..., error = TRUE) {
 
 # check if /usr/local/bin on macOS is writable
 check_local_bin = function() {
-  if (os_index != 3 || is_writable('/usr/local/bin')) return()
-  chown_cmd = 'chown -R `whoami`:admin /usr/local/bin'
+  if (os_index != 3 || is_writable(p <- '/usr/local/bin')) return()
   message(
-    'The directory /usr/local/bin is not writable. I recommend that you ',
-    'make it writable. See https://github.com/rstudio/tinytex/issues/24 for more info.'
+    'The directory ', p, ' is not writable. I recommend that you make it writable. ',
+    'See https://github.com/rstudio/tinytex/issues/24 for more info.'
   )
+  if (!dir_exists(p)) osascript(paste('mkdir -p', p))
+  osascript(paste('chown -R `whoami`:admin', p))
+}
+
+osascript = function(cmd) {
   if (system(sprintf(
-    "/usr/bin/osascript -e 'do shell script \"%s\" with administrator privileges'", chown_cmd
+    "/usr/bin/osascript -e 'do shell script \"%s\" with administrator privileges'", cmd
   )) != 0) warning(
     "Please run this command in your Terminal (password required):\n  sudo ",
-    chown_cmd, call. = FALSE
+    cmd, call. = FALSE
   )
 }
 
