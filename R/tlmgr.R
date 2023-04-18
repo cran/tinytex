@@ -159,10 +159,10 @@ tlmgr_writable = function() is_writable(Sys.which('tlmgr'))
 #' tinytex::check_installed('framed')
 check_installed = function(pkgs) {
   if (length(pkgs) == 0) return(TRUE)
-  res = tryCatch(
+  res = suppressWarnings(tryCatch(
     tl_list(pkgs, stdout = TRUE, stderr = FALSE, .quiet = TRUE),
-    error = function(e) NULL, warning = function(e) NULL
-  )
+    error = function(e) NULL
+  ))
   pkgs %in% res
 }
 
@@ -361,9 +361,9 @@ tl_platforms = function(print = FALSE) {
 # a copy of the returned result from tl_platform() is saved here because
 # tl_platform() is a little slow and requires Internet connection
 .tl_platforms = c(
-  'aarch64-linux', 'amd64-freebsd', 'amd64-netbsd', 'armhf-linux', 'i386-cygwin',
+  'aarch64-linux', 'amd64-freebsd', 'amd64-netbsd', 'armhf-linux',
   'i386-freebsd', 'i386-linux', 'i386-netbsd', 'i386-solaris', 'universal-darwin',
-  'win32', 'x86_64-cygwin', 'x86_64-darwinlegacy', 'x86_64-linux',
+  'windows', 'x86_64-cygwin', 'x86_64-darwinlegacy', 'x86_64-linux',
   'x86_64-linuxmusl', 'x86_64-solaris'
 )
 
