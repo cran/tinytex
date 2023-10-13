@@ -117,7 +117,7 @@ install_tinytex = function(
     extra_packages = switch(
       bundle,
       'TinyTeX-2' = 'scheme-full',
-      'TinyTeX' = xfun::read_utf8('https://yihui.org/gh/tinytex/tools/pkgs-custom.txt'),
+      'TinyTeX' = read_lines('https://yihui.org/gh/tinytex/tools/pkgs-custom.txt'),
       'TinyTeX-0' = {
         warning("bundle = 'TinyTeX-0' is not supported for your system"); NULL
       }
@@ -217,7 +217,8 @@ check_local_bin = function() {
     'See https://github.com/rstudio/tinytex/issues/24 for more info.'
   )
   if (!dir_exists(p)) osascript(paste('mkdir -p', p))
-  osascript(paste('chown -R `whoami`:admin', p))
+  user = system2('whoami', stdout = TRUE)
+  osascript(sprintf('chown -R %s:admin %s', user, p))
 }
 
 osascript = function(cmd) {
@@ -403,7 +404,7 @@ dir_copy = function(from, to) {
 
 # LaTeX packages that I use
 install_yihui_pkgs = function() {
-  pkgs = readLines('https://yihui.org/gh/tinytex/tools/pkgs-yihui.txt')
+  pkgs = read_lines('https://yihui.org/gh/tinytex/tools/pkgs-yihui.txt')
   tlmgr_install(pkgs)
 }
 
