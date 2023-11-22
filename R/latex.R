@@ -590,6 +590,10 @@ regex_errors = function() {
       # when a required tikz library is missing
       '.* (tikzlibrary[^ ]+?[.]code[.]tex).*'
     ),
+    l3backend = c(
+      # L3 programming layer mismatch (#424)
+      '^File: ([^ ]+) \\d{4,}-\\d{2}-\\d{2} .*$'
+    ),
     style = c(
       # missing .sty or commands
       ".* Loading '([^']+)' aborted!",
@@ -614,6 +618,11 @@ detect_files = function(text) {
     v = grep_sub(p, '\\1', x)
     if (length(v) == 0) return(v)
     if (p == r$tikz && length(grep('! Package tikz Error:', text)) == 0) return()
+    # if the problem is caused by the L3 programming layer mismatch, use the
+    # last found file before the error line, which should be from l3backend
+    if (p == r$l3backend) return(
+      if (length(grep('^! Undefined control sequence', text)) > 0) tail(v, 1)
+    )
     # these are some known filenames
     for (i in c('epstopdf', grep('[.]', names(r), value = TRUE))) {
       if (p %in% r[[i]]) return(i)
@@ -662,12 +671,12 @@ texhash = function() {
 
 updmap = function(usermode = FALSE) {
   tweak_path()
-  system2(if (usermode) 'updmap-user' else 'updmap-sys')
+  system2('updmap', if (usermode) '--user' else '--sys')
 }
 
 fmtutil = function(usermode = FALSE, ...) {
   tweak_path()
-  system2(if (usermode) 'fmtutil-user' else 'fmtutil-sys', '--all', ...)
+  system2('fmtutil', c(if (usermode) '--user' else '--sys', '--all'), ...)
 }
 
 fc_cache = function(args = c('-v', '-r')) {
@@ -683,7 +692,7 @@ refresh_all = function(...) {
 }
 
 # look up files in the Kpathsea library, e.g., kpsewhich('Sweave.sty')
-kpsewhich = function(filename, options = character()) {
+kpsewhich = function(filename, options = character(), ...) {
   tweak_path()
-  system2('kpsewhich', c(options, shQuote(filename)))
+  system2('kpsewhich', c(options, shQuote(filename)), ...)
 }

@@ -52,6 +52,9 @@ install_tinytex = function(
     "the installation is aborted."
   )
   if (!is.logical(force)) stop('The argument "force" must take a logical value.')
+  continue_inst = function() {
+    tolower(substr(readline('Continue the installation anyway? (Y/N) '), 1, 1)) == 'y'
+  }
   # if tlmgr is detected in the system, ask in interactive mode whether to
   # continue the installation, and stop in non-interactive() mode
   p = which_bin(c('tlmgr', 'pdftex', 'xetex', 'luatex'))
@@ -59,8 +62,7 @@ install_tinytex = function(
   if (!force && length(p)) {
     message("Found '", p[1], "', which indicates a LaTeX distribution may have existed in the system.")
     if (interactive()) {
-      if (tolower(substr(readline('Continue the installation anyway? (Y/N) '), 1, 1)) != 'y')
-        return(invisible(''))
+      if (!continue_inst()) return(invisible(''))
     } else stop(
       'If you want to force installing TinyTeX anyway, use tinytex::install_tinytex(force = TRUE).'
     )
@@ -77,8 +79,17 @@ install_tinytex = function(
   if (dir != '') {
     dir = gsub('[/\\]+$', '', dir)  # remove trailing slashes
     check_dir(dir)
+    dir = xfun::normalize_path(dir)
+    if (is_windows() && !valid_path(dir)) {
+      warning(
+        "The directory path '", dir, "' contains spaces or non-ASCII characters, ",
+        "and TinyTeX may not work. Please use a path with pure ASCII characters and no spaces.",
+        immediate. = TRUE
+      )
+      if (!force && !(interactive() && continue_inst())) return(invisible(dir))
+    }
     unlink(dir, recursive = TRUE)
-    user_dir = normalizePath(dir, mustWork = FALSE)
+    user_dir = dir
   }
 
   repository = normalize_repo(repository)
@@ -200,14 +211,33 @@ auto_repo = function() {
   if (length(x) == 1) x else 'ctan'
 }
 
-win_app_dir = function(..., error = TRUE) {
+# use %APPDATA%/TinyTeX if it exists or doesn't contain spaces or non-ASCII
+# chars, otherwise use %ProgramData%, because TeX Live doesn't work when the
+# installation path contains non-ASCII chars
+win_app_dir = function(s) {
+  d = Sys.getenv('TINYTEX_DIR')
+  if (d != '') return(file.path(d, s))
   d = Sys.getenv('APPDATA')
-  if (d == '') {
-    if (error) stop('Environment variable "APPDATA" not set.')
-    return(d)
+  if (d != '') {
+    d2 = file.path(d, s)
+    if (dir_exists(d2)) {
+      if (getOption('tinytex.warn.appdata', TRUE) && !xfun::is_ascii(d2)) warning(
+        "You are recommended to move TinyTeX to another location via\n\n",
+        "  tinytex::copy_tinytex(to = Sys.getenv('ProgramData'), move = TRUE)\n\n",
+        "otherwise TinyTeX will not work because its current installation path '",
+        normalizePath(d2), "' contains non-ASCII characters.", call. = FALSE
+      )
+      return(d2)
+    }
+    if (valid_path(d)) return(d2)
   }
-  file.path(d, ...)
+  d = Sys.getenv('ProgramData')
+  if (d == '') stop("The environment variable 'ProgramData' is not set.")
+  file.path(d, s)
 }
+
+# test if path is pure ASCII and has no spaces
+valid_path = function(x) grepl('^[!-~]+$', x)
 
 # check if /usr/local/bin on macOS is writable
 check_local_bin = function() {
@@ -472,7 +502,7 @@ install_prebuilt = function(
 }
 
 # post-install configurations
-post_install_config = function(add_path, extra_packages, repo, hash = FALSE) {
+post_install_config = function(add_path = TRUE, extra_packages = NULL, repo = 'ctan', hash = FALSE) {
   if (os_index == 2) {
     if (!dir_exists(bin_dir <- '~/.local/bin')) dir.create(bin_dir <- '~/bin', FALSE, TRUE)
     tlmgr(c('option', 'sys_bin', bin_dir))
@@ -516,14 +546,28 @@ download_installer = function(file, version) {
 #' @param to The destination directory where you want to make a copy of TinyTeX.
 #'   Like \code{from} in \code{use_tinytex()}, a dialog will pop up if \code{to}
 #'   is not provided in \code{copy_tinytex()}.
+#' @param move Whether to use the new copy and delete the original copy of
+#'   TinyTeX after copying it.
 #' @note You can only copy TinyTeX and use it in the same system, e.g., the
 #'   Windows version of TinyTeX only works on Windows.
 #' @export
-copy_tinytex = function(from = tinytex_root(), to = select_dir('Select Destination Directory')) {
+copy_tinytex = function(
+  from = tinytex_root(), to = select_dir('Select Destination Directory'), move = FALSE
+) {
+  op = options(tinytex.warn.appdata = FALSE); on.exit(options(op), add = TRUE)
   if (!dir_exists(from)) stop('TinyTeX does not seem to be installed.')
   if (length(to) != 1 || !dir_exists(to))
     stop("The destination directory '", to, "' does not exist.")
-  file.copy(from, to, recursive = TRUE)
+  target = file.path(to, basename(from))
+  if (!move || !{tlmgr_path('remove'); res <- file.rename(from, target)}) {
+    res = file.copy(from, to, recursive = TRUE)
+    if (res && move) {
+      tlmgr_path('remove')
+      unlink(from, recursive = TRUE)
+    }
+  }
+  if (res && move) use_tinytex(target)
+  res
 }
 
 #' @rdname copy_tinytex
@@ -539,6 +583,8 @@ use_tinytex = function(from = select_dir('Select TinyTeX Directory')) {
     "Failed to add '", d, "' to your system's environment variable PATH. You may ",
     "consider the fallback approach, i.e., set options(tinytex.tlmgr.path = '", p, "')."
   )
+  op = options(tinytex.tlmgr.path = p); on.exit(options(op), add = TRUE)
+  post_install_config(FALSE)
   message('Restart R and your editor and check if tinytex::tinytex_root() points to ', from)
 }
 
