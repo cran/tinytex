@@ -1,10 +1,11 @@
-0fc0997f56d32cc16ce052ed90cebad9 *DESCRIPTION
+16cbf2299f61380080910ca56d6d240e *DESCRIPTION
 214aad66205c39813fa32d36c37a64c9 *LICENSE
 3fed972b9d8fbe8160ac430077bc4258 *NAMESPACE
 166c6d64b81d558fa044e461e4e4a801 *R/install.R
-2a1c875720c3592822b659c4729cc769 *R/latex.R
+9ff8c0f232460431b6e2adf32b3f2f62 *R/latex.R
 0a363e5d065005b52e4d93270ddaf416 *R/package.R
-35e5fdb541f259fb2a04491c18719338 *R/tlmgr.R
+35d94b11620154f63af27057055b5583 *R/platforms.R
+fdc1786fdd82b19bc9b9e90e2faff937 *R/tlmgr.R
 a94156ccfbc5d10fd9f90ea685954d1e *R/utils.R
 6bb251e68e88b7b36342b62c0b67f030 *README.md
 757e76a4de0b6b3cc0549f6c08e84fe8 *inst/CITATION
@@ -13,7 +14,7 @@ beb72b729727b5d7e94b9ba60ecaa66a *man/check_installed.Rd
 51be9176879b070ef6d0e0a3e92d463d *man/copy_tinytex.Rd
 9fa5ddd0d5a5cba87b9e979a8fa5d7ea *man/install_tinytex.Rd
 2856e7abb8fa85e11e67b8ab98928604 *man/is_tinytex.Rd
-e8a825623e22c69e3291e1c48af34d49 *man/latexmk.Rd
+e90b37aa12ff40abd5c5bb90f5ecde40 *man/latexmk.Rd
 6e322ddcc88698ded4976ae80cc3788d *man/parse_install.Rd
 dee1900604e4dac0d368df63650b11e9 *man/parse_packages.Rd
 618fbe58b795fa525d7a59c0339f7b53 *man/r_texmf.Rd
@@ -22,7 +23,9 @@ a5242c76dddeaeb81e6be6b82d0c3bf2 *man/tinytex-package.Rd
 58ee80fb118f9e8acb8050f8d3c1b499 *man/tl_sizes.Rd
 11609ea6698f90a0f34232637e50d5ef *man/tlmgr.Rd
 5379d6c431f637f908d6ea7bf498ab03 *tests/test-ci.R
+fd0ce71bbdfbe0da9853f0be047378df *tests/test-ci/test-dvi.tex
 3566092b9846c158fed92c0536cfa798 *tests/test-ci/test-install.R
+046c35f3f2056d498fae3be2a253c7ef *tests/test-ci/test-latex.R
 598698a9ddda44f24fa635c94ff92c17 *tests/test-ci/test-tlmgr.R
 adafda5ea0b62571a6766d4c95aaa065 *tests/test-cran.R
 a8d0b75110bb7d0a137fabfef5ba5d41 *tests/test-cran/test-latex.R
