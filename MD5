@@ -1,8 +1,8 @@
-5f1ed1474e52023a2e35ae6001c56887 *DESCRIPTION
+ed1891974012e214b440c7733d51ba07 *DESCRIPTION
 214aad66205c39813fa32d36c37a64c9 *LICENSE
 3fed972b9d8fbe8160ac430077bc4258 *NAMESPACE
 166c6d64b81d558fa044e461e4e4a801 *R/install.R
-f0d1249062d76a6e6c9d113abf662d38 *R/latex.R
+3bcae06bc81b2bb15328ff89de38cee5 *R/latex.R
 0a363e5d065005b52e4d93270ddaf416 *R/package.R
 35d94b11620154f63af27057055b5583 *R/platforms.R
 fdc1786fdd82b19bc9b9e90e2faff937 *R/tlmgr.R
@@ -29,4 +29,4 @@ fd0ce71bbdfbe0da9853f0be047378df *tests/test-ci/test-dvi.tex
 282a41f1a47614a34aca2152ace08a2c *tests/test-ci/test-latex.R
 598698a9ddda44f24fa635c94ff92c17 *tests/test-ci/test-tlmgr.R
 adafda5ea0b62571a6766d4c95aaa065 *tests/test-cran.R
-a8d0b75110bb7d0a137fabfef5ba5d41 *tests/test-cran/test-latex.R
+e7e9394d1ffe0f66a23f61499b744ece *tests/test-cran/test-latex.R
