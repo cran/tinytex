@@ -3,29 +3,29 @@
 #' Execute the \command{tlmgr} command to search for LaTeX packages, install
 #' packages, update packages, and so on.
 #'
-#' The \code{tlmgr()} function is a wrapper of \code{system2('tlmgr')}. All
-#' other \code{tlmgr_*()} functions are based on \code{tlmgr} for specific
-#' tasks. For example, \code{tlmgr_install()} runs the command \command{tlmgr
-#' install} to install LaTeX packages, and \code{tlmgr_update} runs the command
-#' \command{tlmgr update}, etc. Note that \code{tlmgr_repo} runs \command{tlmgr
+#' The `tlmgr()` function is a wrapper of `system2('tlmgr')`. All
+#' other `tlmgr_*()` functions are based on `tlmgr` for specific
+#' tasks. For example, `tlmgr_install()` runs the command \command{tlmgr
+#' install} to install LaTeX packages, and `tlmgr_update` runs the command
+#' \command{tlmgr update}, etc. Note that `tlmgr_repo` runs \command{tlmgr
 #' options repository} to query or set the CTAN repository. Please consult the
 #' \pkg{tlmgr} manual for full details.
 #' @param args A character vector of arguments to be passed to the command
 #'   \command{tlmgr}.
 #' @param usermode (For expert users only) Whether to use TeX Live's
-#'   \href{https://www.tug.org/texlive/doc/tlmgr.html#USER-MODE}{user mode}. If
-#'   \code{TRUE}, you must have run \code{tlmgr('init-usertree')} once before.
+#'   [user mode](https://www.tug.org/texlive/doc/tlmgr.html#USER-MODE). If
+#'   `TRUE`, you must have run `tlmgr('init-usertree')` once before.
 #'   This option allows you to manage a user-level texmf tree, e.g., install a
 #'   LaTeX package to your home directory instead of the system directory, to
 #'   which you do not have write permission. This option should not be needed on
 #'   personal computers, and has some limitations, so please read the
 #'   \pkg{tlmgr} manual very carefully before using it.
-#' @param ... For \code{tlmgr()}, additional arguments to be passed to
-#'   \code{\link{system2}()} (e.g., \code{stdout = TRUE} to capture stdout). For
-#'   other functions, arguments to be passed to \code{tlmgr()}.
+#' @param ... For `tlmgr()`, additional arguments to be passed to
+#'   [system2()] (e.g., `stdout = TRUE` to capture stdout). For
+#'   other functions, arguments to be passed to `tlmgr()`.
 #' @param .quiet Whether to hide the actual command before executing it.
 #' @references The \pkg{tlmgr} manual:
-#'   \url{https://www.tug.org/texlive/doc/tlmgr.html}
+#'   <https://www.tug.org/texlive/doc/tlmgr.html>
 #' @export
 #' @examplesIf interactive()
 #' # search for a package that contains titling.sty
@@ -59,12 +59,15 @@ tlmgr = function(args = character(), usermode = FALSE, ..., .quiet = FALSE) {
 # check if it is necessary to add ~/Library/TinyTeX/bin/*/ to PATH
 
 #' @importFrom xfun is_linux is_unix is_macos is_windows with_ext
+# return the bin directory of TinyTeX (empty string if not found)
+find_tinytex_bin = function() {
+  f = getOption('tinytex.tlmgr.path', find_tlmgr(extra = TRUE))
+  if (length(f) == 0 || !file_test('-x', f)) '' else normalizePath(dirname(f))
+}
+
 tweak_path = function() {
-  # check tlmgr exists under the default installation dir of TinyTeX, or the
-  # global option tinytex.tlmgr.path
-  f = getOption('tinytex.tlmgr.path', find_tlmgr())
-  if (length(f) == 0 || !file_test('-x', f)) return()
-  bin = normalizePath(dirname(f))
+  bin = find_tinytex_bin()
+  if (bin == '') return()
   # if the pdftex from TinyTeX is already on PATH, no need to adjust the PATH
   if ((p <- Sys.which('pdftex')) != '') {
     p2 = with_ext(file.path(bin, 'pdftex'), xfun::file_ext(p))
@@ -82,10 +85,10 @@ tweak_path = function() {
 tlmgr_available = function() Sys.which('tlmgr') != ''
 
 #' @param what A search keyword as a (Perl) regular expression.
-#' @param file Whether to treat \code{what} as a filename (pattern).
-#' @param all For \code{tlmgr_search()}, whether to search in everything,
+#' @param file Whether to treat `what` as a filename (pattern).
+#' @param all For `tlmgr_search()`, whether to search in everything,
 #'   including package names, descriptions, and filenames. For
-#'   \code{tlmgr_update()}, whether to update all installed packages.
+#'   `tlmgr_update()`, whether to update all installed packages.
 #' @param global Whether to search the online TeX Live Database or locally.
 #' @param word Whether to restrict the search of package names and descriptions
 #'   to match only full words.
@@ -99,8 +102,8 @@ tlmgr_search = function(what, file = TRUE, all = FALSE, global = TRUE, word = FA
 }
 
 #' @param pkgs A character vector of LaTeX package names.
-#' @param path Whether to run \code{tlmgr_path('add')} after installing packages
-#'   (\code{path = TRUE} is a conservative default: it is only necessary to do
+#' @param path Whether to run `tlmgr_path('add')` after installing packages
+#'   (`path = TRUE` is a conservative default: it is only necessary to do
 #'   this after a binary package is installed, such as the \pkg{metafont}
 #'   package, which contains the executable \command{mf}, but it does not hurt
 #'   even if no binary packages were installed).
@@ -147,10 +150,10 @@ tlmgr_writable = function() is_tinytex() && is_writable(Sys.which('tlmgr'))
 #' Check if certain LaTeX packages are installed
 #'
 #' If a package has been installed in TinyTeX or TeX Live, the command
-#' \command{tlmgr info PKG} should return \code{PKG} where \code{PKG} is the
+#' \command{tlmgr info PKG} should return `PKG` where `PKG` is the
 #' package name.
 #' @param pkgs A character vector of LaTeX package names.
-#' @return A logical vector indicating if packages specified in \code{pkgs} are
+#' @return A logical vector indicating if packages specified in `pkgs` are
 #'   installed.
 #' @note This function only works with LaTeX distributions based on TeX Live,
 #'   such as TinyTeX.
@@ -172,16 +175,16 @@ tlmgr_remove = function(pkgs = character(), usermode = FALSE) {
   if (length(pkgs)) tlmgr(c('remove', pkgs), usermode)
 }
 
-#' @param format The data format to be returned: \code{raw} means the raw output
-#'   of the command \command{tlmgr --version}, \code{string} means a character
+#' @param format The data format to be returned: `raw` means the raw output
+#'   of the command \command{tlmgr --version}, `string` means a character
 #'   string of the format \samp{TeX Live YEAR (TinyTeX) with tlmgr DATE}, and
-#'   \code{list} means a list of the form \code{list(texlive = YEAR, tlmgr =
-#'   DATE, tinytex = TRUE/FALSE)}.
+#'   `list` means a list of the form `list(texlive = YEAR, tlmgr =
+#'   DATE, tinytex = TRUE/FALSE)`.
 #' @rdname tlmgr
 #' @importFrom xfun raw_string
 #' @export
 tlmgr_version = function(format = c('raw', 'string', 'list')) {
-  vers = tlmgr('--version', stdout = TRUE, .quiet = TRUE)
+  vers = suppressWarnings(tlmgr('--version', stdout = TRUE, .quiet = TRUE))
   format = match.arg(format)
   if (format != 'raw') {
     year = xfun::grep_sub('^TeX Live.* version (\\d+).*$', '\\1', vers)[1]
@@ -216,8 +219,10 @@ tlmgr_update = function(
     c('update', if (all) '--all', if (self && !usermode) '--self', more_args),
     usermode, ..., stdout = TRUE, stderr = TRUE
   ))
-  check_tl_version(res)
-  if (run_fmtutil) fmtutil(usermode, stdout = FALSE)
+  # run fmtutil only if there's no new version of TeX Live
+  if (!check_tl_version(res)) {
+    if (run_fmtutil) fmtutil(usermode, stdout = FALSE)
+  }
   if (delete_tlpdb) delete_tlpdb_files()
   invisible()
 }
@@ -226,8 +231,10 @@ tlmgr_update = function(
 # how to upgrade
 check_tl_version = function(x) {
   i = grep('Local TeX Live \\([0-9]+) is older than remote repository \\([0-9]+)', x)
-  if (length(i) > 0) auto_upgrade()
-  .global$update_noted = TRUE
+  length(i) > 0 && {
+    auto_upgrade()
+    .global$update_noted = TRUE
+  }
 }
 
 # provide a way options(tinytex.upgrade = TRUE) to automatically upgrade TinyTeX
@@ -240,7 +247,7 @@ auto_upgrade = function() {
   if (!up) return(message(
     'A new version of TeX Live has been released. If you need to install or update ',
     'any LaTeX packages, you have to upgrade ', if (!is_tinytex()) 'TeX Live.' else c(
-      'TinyTeX with tinytex::reinstall_tinytex(repository = "illinois").'
+      'TinyTeX with tinytex::reinstall_tinytex().'
     )
   ))
   root = tinytex_root()
@@ -254,13 +261,19 @@ delete_tlpdb_files = function() {
   ))
 }
 
-#' @param action On Unix, add/remove symlinks of binaries to/from the system's
-#'   \code{PATH}. On Windows, add/remove the path to the TeXLive binary
-#'   directory to/from the system environment variable \code{PATH}.
+#' @param action On macOS, if \file{/usr/local/bin} is not writable, add/remove
+#'   the TinyTeX bin path to/from \file{/etc/paths.d/TinyTeX}; otherwise (or on
+#'   other Unix systems), add/remove symlinks of binaries to/from the system's
+#'   `PATH`. On Windows, add/remove the path to the TeX Live binary
+#'   directory to/from the system environment variable `PATH`.
 #' @rdname tlmgr
 #' @export
-tlmgr_path = function(action = c('add', 'remove'))
-  tlmgr(c('path', match.arg(action)), .quiet = TRUE)
+tlmgr_path = function(action = c('add', 'remove')) {
+  action = match.arg(action)
+  if (use_paths_d()) {
+    invisible(macos_path(find_tinytex_bin(), action))
+  } else tlmgr(c('path', action), .quiet = TRUE)
+}
 
 #' @rdname tlmgr
 #' @export
@@ -268,9 +281,9 @@ tlmgr_conf = function(more_args = character(), ...) {
   tlmgr(c('conf', more_args), ...)
 }
 
-#' @param url The URL of the CTAN mirror. If \code{NULL}, show the current
-#'   repository, otherwise set the repository. See the \code{repository}
-#'   argument of \code{\link{install_tinytex}()} for examples.
+#' @param url The URL of the CTAN mirror. If `NULL`, show the current
+#'   repository, otherwise set the repository. See the `repository`
+#'   argument of [install_tinytex()] for examples.
 #' @rdname tlmgr
 #' @export
 tlmgr_repo = function(url = NULL, ...) {
@@ -282,15 +295,15 @@ tlmgr_repo = function(url = NULL, ...) {
 #' R ships a custom texmf tree containing a few LaTeX style and class files,
 #' which are required when compiling R packages manuals (\file{Rd.sty}) or
 #' Sweave documents (\file{Sweave.sty}). This tree can be found under the
-#' directory \code{file.path(R.home('share'), 'texmf')}. This function can be
+#' directory `file.path(R.home('share'), 'texmf')`. This function can be
 #' used to add/remove R's texmf tree to/from TeX Live via
-#' \code{\link{tlmgr_conf}('auxtrees')}.
+#' `[tlmgr_conf]('auxtrees')`.
 #' @param action Add/remove R's texmf tree to/from TeX Live.
-#' @param ... Arguments passed to \code{\link{tlmgr}()}.
+#' @param ... Arguments passed to [tlmgr()].
 #' @references See the \pkg{tlmgr} manual for detailed information about
 #'   \command{tlmgr conf auxtrees}. Check out
-#'   \url{https://tex.stackexchange.com/q/77720/9128} if you don't know what
-#'   \code{texmf} means.
+#'   <https://tex.stackexchange.com/q/77720/9128> if you don't know what
+#'   `texmf` means.
 #' @export
 #' @examples
 #' # running the code below will modify your texmf tree; please do not run
@@ -323,13 +336,13 @@ r_texmf_path = function() {
 #' @param show_total Whether to show the total size.
 #' @param pkgs A character vector of package names (by default, all packages).
 #' @param field A character vector of field names in the package information.
-#'   See \url{https://www.tug.org/texlive/doc/tlmgr.html#info} for more info.
+#'   See <https://www.tug.org/texlive/doc/tlmgr.html#info> for more info.
 #' @inheritParams tl_pkgs
 #' @export
-#' @return By default, a data frame of three columns: \code{package} is the
-#'   package names, \code{size} is the sizes in bytes, and \code{size_h} is the
+#' @return By default, a data frame of three columns: `package` is the
+#'   package names, `size` is the sizes in bytes, and `size_h` is the
 #'   human-readable version of sizes. If different field names are provided in
-#'   the \code{field} argument, the returned data frame will contain these
+#'   the `field` argument, the returned data frame will contain these
 #'   columns.
 tl_sizes = function(show_total = TRUE, pkgs = NULL, only_installed = TRUE, field = 'size') {
   info = tl_list(pkgs, paste(c('name', field), collapse = ','), only_installed, stdout = TRUE)
@@ -348,7 +361,7 @@ tl_sizes = function(show_total = TRUE, pkgs = NULL, only_installed = TRUE, field
 #'
 #' Calls \command{tlmgr info --list --data name} to obtain the names of all
 #' (installed) TeX Live packages. Platform-specific strings in package names are
-#' removed, e.g., \code{"tex"} is returned for the package
+#' removed, e.g., `"tex"` is returned for the package
 #' \pkg{tex.x86_64-darwin}.
 #' @param only_installed Whether to list installed packages only.
 #' @export
