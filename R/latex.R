@@ -16,6 +16,13 @@
 #' By default, LaTeX warnings will be converted to R warnings. To suppress these
 #' warnings, set `options(tinytex.latexmk.warning = FALSE)`.
 #'
+#' By default, the output of the LaTeX engine, \command{makeindex}, and the
+#' bibliography engine is hidden. To show it as the commands run, set
+#' `options(tinytex.verbose = TRUE)`, which also reports the messages about
+#' installing LaTeX packages. Note that the bibliography log (e.g.,
+#' \file{*.blg}) is removed after compilation when `clean = TRUE`, so the output
+#' of \command{biber} is only available with `tinytex.verbose`.
+#'
 #' If `emulation = FALSE`, you need to make sure the executable
 #' \command{latexmk} is available in your system, otherwise `latexmk()`
 #' will fall back to `emulation = TRUE`. You can set the global option
@@ -62,7 +69,17 @@
 #'   packages found by [parse_packages()] from the LaTeX log. This
 #'   argument is only for the emulation mode and TeX Live. Its value can also be
 #'   set via the global option `tinytex.install_packages`, e.g.,
-#'   `options(tinytex.install_packages = FALSE)`.
+#'   `options(tinytex.install_packages = FALSE)`. Missing packages are normally
+#'   found from the log, one failed run of the LaTeX engine at a time, which is
+#'   robust but can be slow when many packages are missing. You can opt in to a
+#'   faster approach (at the cost of accuracy) with
+#'   `options(tinytex.prescan_packages = TRUE)`: the `\usepackage{}` and
+#'   `\RequirePackage{}` commands in `file` are scanned before compilation, and
+#'   the packages that cannot be found are installed in a single \command{tlmgr}
+#'   call. This is only a heuristic (e.g., it does not look into files included
+#'   via `\input`, and does not understand conditionals or macros), so it may
+#'   install packages that are not actually needed. Packages it misses are
+#'   still installed from the log as usual.
 #' @param pdf_file Path to the PDF output file. By default, it is under the same
 #'   directory as the input `file` and also has the same base name. When
 #'   `engine == 'latex'` or `engine_args` contains \verb{--no-pdf} or
@@ -198,6 +215,8 @@ latexmk_emu = function(
     if (install_packages && Sys.which(cmd) == '') parse_install(file = cmd)
   }
   install_cmd(engine)
+  if (install_packages && getOption('tinytex.prescan_packages', FALSE))
+    try(prescan_install(file, quiet = !verbose), silent = TRUE)
 
   run_engine = function() {
     on_error  = function() {
@@ -222,7 +241,7 @@ latexmk_emu = function(
       error = {
         if (install_packages) tlmgr_update(run_fmtutil = FALSE, .quiet = TRUE)
         on_error()
-      }, logfile = logfile, fail_rerun = verbose
+      }, logfile = logfile, fail_rerun = FALSE
     )
     # PNAS you are the worst! Why don't you signal an error in case of missing packages?
     if (res == 0 && !file.exists(filep)) on_error()
@@ -320,8 +339,9 @@ system2_quiet = function(..., error = NULL, logfile = NULL, fail_rerun = TRUE) {
   f1 = tempfile('stdout'); f2 = tempfile('stderr')
   on.exit(unlink(c(f1, f2)), add = TRUE)
 
-  # run the command quietly if possible
-  res = system2(..., stdout = if (use_file_stdout()) f1 else FALSE, stderr = f2)
+  # show stdout if verbose, otherwise run the command quietly if possible
+  stdout = if (getOption('tinytex.verbose', FALSE)) '' else if (use_file_stdout()) f1 else FALSE
+  res = system2(..., stdout = stdout, stderr = f2)
   if (is.character(logfile) && file.exists(f2) && length(e <- read_lines(f2))) {
     i = grep('^\\s*$', e, invert = TRUE)
     e[i] = paste('!', e[i])  # prepend ! to non-empty error messages
@@ -414,7 +434,10 @@ latex_warning = function(file, show = getOption('tinytex.latexmk.warning', TRUE)
 
 # check if any babel/glossaries/... packages are missing
 check_extra = function(file) {
-  length(m <- latex_warning(file, FALSE)) > 0 &&
+  # babel may silently fall back to the current \language when the hyphenation
+  # patterns of a language set up from its .ini file are missing (#519)
+  r1 = file.exists(file) && check_babel_fallback(read_lines(file))
+  r2 = length(m <- latex_warning(file, FALSE)) > 0 &&
     length(grep('^Package ([^ ]+) Warning:', m)) > 0 &&
     any(
       check_babel(m),
@@ -422,15 +445,102 @@ check_extra = function(file) {
       check_datetime2(m),
       check_polyglossia(m)
     )
+  r1 || r2
 }
 
 check_babel = function(text) {
   r = "^(\\(babel\\).* |Package babel Warning: No hyphenation patterns were preloaded for the )language [`']([^']+)'.*$"
-  if (length(m <- grep_sub(r, 'hyphen-\\2', text)) == 0) return(FALSE)
+  if (length(m <- grep_sub(r, '\\2', text)) == 0) return(FALSE)
+  length(pkgs <- hyphen_pkgs(m)) > 0 && tlmgr_install(pkgs) == 0
+}
+
+# map language names in babel/polyglossia messages to TeX Live hyphen-* packages
+hyphen_pkgs = function(x) {
+  x = tolower(gsub("[`']", '', x))
   # (babel) the language `German (new orthography)' into the format
-  m = gsub('\\s.*', '', m)
-  m[m == 'hyphen-pinyin'] = 'hyphen-chinese'
-  tlmgr_install(tolower(m)) == 0
+  x = gsub('\\s.*', '', x)
+  # names come from a log file, so only keep what looks like a package name
+  # (all names in language.dat/texlive.tlpdb are lowercase letters, digits, and
+  # hyphens), since package names are passed to tlmgr via system2()
+  x = x[grepl('^[a-z0-9-]+$', x)]
+  # names that are not simply hyphen-<name> are in .hyphen_map (R/hyphen.R)
+  p = sprintf('hyphen-%s', x)
+  i = x %in% names(.hyphen_map)
+  p[i] = .hyphen_map[x[i]]
+  unique(unname(p))
+}
+
+# missing hyphenation patterns may also lead to babel errors (instead of
+# warnings), e.g., with the babel option nswissgerman (#515):
+# ! Package babel Error: You haven't defined the language 'ngerman' yet.
+# (babel)                Perhaps you misspelled it or your installation
+# (babel)                is not complete.
+detect_hyphen = function(text) {
+  r = ".*Package babel Error: You haven't defined the language [`']([^'`]+)' yet.*"
+  if (length(m <- grep_sub(r, '\\1', text)) == 0) return(character())
+  hyphen_pkgs(m)
+}
+
+# when babel sets up a language from its .ini file (\babelprovide[import]{lang}
+# or the provide=* package option) and the hyphenation patterns are not
+# installed, babel silently falls back to the current \language with an Info
+# line instead of a warning (#519):
+# Package babel Info: Importing data for 'spanish'
+# (babel)             from babel-es.ini. Reported on input line 3.
+# Package babel Info: Hyphen rules for 'spanish' set to \l@english
+# (babel)             (\language0). Reported on input line 3.
+# \babelprovide{lang} without import logs "Importing basic data", and babel
+# 3.84 did not quote the language name. A language loaded from an .ldf file
+# logs "Importing font and identification data", but this is not followed by
+# the .ini hyphenrules lookup, so it must not be paired with the Hyphen rules
+# line. The same pair of lines appears when the patterns were found under
+# another name (e.g., 'austrian' set to \l@ngerman-x-2024-02-28), so the target
+# of `set to` is compared against the hyphenation language that the locale's
+# .ini file expects (.babel_hyphen_map), modulo language.dat synonyms
+# (.hyphen_synonyms); a target of \l@nil (no hyphenation) is a fallback, too,
+# when the locale expects patterns
+detect_babel_fallback = function(text) {
+  if (length(text) == 0) return(character())
+  # join babel message continuation lines (e.g., "(babel)  from babel-es.ini.")
+  # to the message they belong to
+  i = grepl('^\\(babel\\)\\s+', text)
+  text[i] = sub('^\\(babel\\)\\s+', '', text[i])
+  text = as.vector(tapply(text, cumsum(!i), paste, collapse = ' '))
+  r1 = "^Package babel Info: Importing (basic )?data for '?([^' ]+)'? .*from babel-([-.A-Za-z0-9]+)[.]ini.*$"
+  r2 = "^Package babel Info: Hyphen rules for '([^']+)' set to \\\\l@([-.A-Za-z0-9]+).*$"
+  # locale name -> base name of the imported .ini file; the name may be a
+  # custom one (\babelprovide[import=es]{myspanish}), in which case only the
+  # .ini file name points to the expected patterns
+  imp = grep(r1, text, value = TRUE)
+  imp_code = stats::setNames(tolower(sub(r1, '\\3', imp)), tolower(sub(r1, '\\2', imp)))
+  m = grep(r2, text, value = TRUE)
+  # the fallback line is the one paired with an Importing line for the same
+  # language; the english.ldf dialects (canadian, australian, ...) have no
+  # Importing line
+  i = tolower(sub(r2, '\\1', m)) %in% names(imp_code)
+  if (!any(i)) return(character())
+  lang = tolower(sub(r2, '\\1', m[i]))
+  target = tolower(sub(r2, '\\2', m[i]))
+  expected = unname(.babel_hyphen_codes[imp_code[lang]])
+  # .ini files without a hyphenrules value are not in .babel_hyphen_codes;
+  # for them the locale name itself is the expected pattern if it is a
+  # language.dat name (.babel_hyphen_map)
+  j = is.na(expected)
+  expected[j] = unname(.babel_hyphen_map[lang[j]])
+  miss = !is.na(expected) & hyphen_canon(target) != hyphen_canon(expected)
+  hyphen_pkgs(unname(expected[miss]))
+}
+
+check_babel_fallback = function(text) {
+  length(pkgs <- detect_babel_fallback(text)) > 0 && tlmgr_install(pkgs) == 0
+}
+
+# canonical name of a hyphenation language, resolving language.dat synonyms
+hyphen_canon = function(x) {
+  i = match(x, names(.hyphen_synonyms))
+  j = !is.na(i)
+  x[j] = .hyphen_synonyms[i[j]]
+  x
 }
 
 # Package glossaries Warning: No language module detected for `english'.
@@ -448,9 +558,7 @@ check_glossaries = function(text) {
 check_polyglossia = function(text) {
   r = "^Package polyglossia Warning: No hyphenation patterns were loaded for ([`'][^']+'|British English).*"
   if (length(m <- grep_sub(r, '\\1', text)) == 0) return(FALSE)
-  m[m == 'British English'] = 'english'
-  m = gsub("[`']", '', m)
-  tlmgr_install(paste0('hyphen-', m)) == 0
+  length(pkgs <- hyphen_pkgs(m)) > 0 && tlmgr_install(pkgs) == 0
 }
 
 # Package datetime2 Warning: Date-Time Language Module `english' not installed on
@@ -505,9 +613,13 @@ exist_files = function(files) {
 parse_packages = function(
   log, text = read_lines(log), files = detect_files(text), quiet = rep(FALSE, 3)
 ) {
-  pkgs = character(); quiet = rep_len(quiet, length.out = 3)
+  quiet = rep_len(quiet, length.out = 3)
+  # hyphen-* packages are inferred from language names instead of file names
+  # (`text` may be unavailable, e.g., parse_packages(files = 'bibtex'))
+  pkgs = if (missing(log) && missing(text)) character() else detect_hyphen(text)
   x = unique(c(files, miss_font()))
   if (length(x) == 0) {
+    if (length(pkgs)) return(pkgs)
     if (!quiet[1]) message(
       'I was unable to find any missing LaTeX packages from the error log',
       if (missing(log)) '.' else c(' ', log, '.')
@@ -520,27 +632,32 @@ parse_packages = function(
     # Known packages where tlmgr search returns results but no file path ends
     # with the exact package name (e.g., no file ends with "/latex-lab").
     # These packages are returned directly without further tlmgr search parsing.
-    if (x[j] %in% c('fandol', 'latex-lab')) return(x[j])
-    # why $? e.g. searching for mf returns a list like this
-    # metafont.x86_64-darwin:
-    #     bin/x86_64-darwin/mf       <- what we want
-    # metapost.x86_64-darwin:
-    #     bin/x86_64-darwin/mfplain  <- but this also matches /mf
-    k = grep(paste0('/', x[j], '$'), l)  # only match /mf exactly
-    if (length(k) == 0) {
+    if (x[j] %in% c('fandol', 'latex-lab')) return(unique(c(pkgs, x[j])))
+    res = search_pkgs(l, x[j])
+    if (length(res) == 0) {
       if (!quiet[3]) warning('Failed to find a package that contains ', x[j])
       next
     }
-    k = k[k > 2]
-    p = grep(':$', l)
-    if (length(p) == 0) next
-    for (i in k) {
-      pkg  = gsub(':$', '', l[max(p[p < i])])  # find the package name
-      pkgs = c(pkgs, setNames(pkg, x[j]))
-    }
+    pkgs = c(pkgs, res)
   }
   pkgs = gsub('[.].*', '', pkgs)  # e.g., 'metafont.x86_64-darwin'
   unique(pkgs)
+}
+
+# find packages that contain a file ending with `/f` in the output `l` of
+# `tlmgr search --file`, which is a list of "pkg:" lines followed by file paths
+search_pkgs = function(l, f) {
+  # why $? e.g. searching for mf returns a list like this
+  # metafont.x86_64-darwin:
+  #     bin/x86_64-darwin/mf       <- what we want
+  # metapost.x86_64-darwin:
+  #     bin/x86_64-darwin/mfplain  <- but this also matches /mf
+  k = grep(paste0('/', f, '$'), l)  # only match /f exactly
+  k = k[k > 2]
+  p = grep(':$', l)
+  if (length(k) == 0 || length(p) == 0) return(character())
+  # find the package names
+  setNames(gsub(':$', '', l[sapply(k, function(i) max(p[p < i]))]), f)
 }
 
 regex_errors = function() {
@@ -651,6 +768,36 @@ detect_files = function(text) {
     v = gsub('^.*?:|:.*$', '', v)  # https://github.com/rstudio/tinytex/issues/465
     if (p == r$font[1]) paste0(v, '.sty') else font_ext(v)
   })))
+}
+
+# find the names of LaTeX packages requested via \usepackage{} or
+# \RequirePackage{} in a .tex file; this is only a rough scan (files included via
+# \input, conditionals, and macros are not handled), so it may be inaccurate
+scan_packages = function(text) {
+  text = paste(sub('(^|[^\\\\])%.*', '\\1', text), collapse = '\n')  # drop comments
+  x = unlist(regmatches(text, gregexpr(
+    '\\\\(usepackage|RequirePackage)\\s*(\\[[^]]*\\])?\\s*[{][^}]*[}]', text
+  )))
+  x = trimws(unlist(strsplit(sub('^[^{]*[{]([^}]*)[}]$', '\\1', x), ',')))
+  unique(x[grepl('^[A-Za-z0-9_-]+$', x)])
+}
+
+# install the LaTeX packages that are used by a .tex file but not yet installed,
+# in a single tlmgr call (opt-in via the option tinytex.prescan_packages), instead
+# of waiting for the engine to fail on one missing .sty file at a time
+prescan_install = function(file, quiet = TRUE) {
+  x = scan_packages(read_lines(file))
+  if (length(x) == 0) return()
+  f = paste0(x, '.sty')
+  # skip the ones that can already be found
+  f = setdiff(f, basename(suppressWarnings(kpsewhich(f, stdout = TRUE, stderr = FALSE))))
+  if (length(f) == 0) return()
+  l = tlmgr_search(
+    paste0('/(', paste(gsub('[.]sty$', '', f), collapse = '|'), ')\\.sty$'),
+    stdout = TRUE, .quiet = quiet
+  )
+  pkgs = unique(gsub('[.].*', '', unlist(lapply(f, search_pkgs, l = l))))
+  tlmgr_install(pkgs, .quiet = quiet)
 }
 
 #' Parse the LaTeX log and install missing LaTeX packages if possible
